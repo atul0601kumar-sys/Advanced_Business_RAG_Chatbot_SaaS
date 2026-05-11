@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from urllib.request import Request, urlopen
 
@@ -11,6 +12,7 @@ from app.services.redis_queue import shared_task_queue
 
 router = APIRouter(tags=["health"])
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/health")
@@ -60,7 +62,8 @@ def _qdrant_ready() -> bool:
         request = Request(f"{settings.qdrant_url.rstrip('/')}/readyz", headers=headers)
         with urlopen(request, timeout=3) as response:
             return response.status == 200
-    except Exception:
+    except Exception as exc:
+        logger.warning("Primary Qdrant readiness probe failed", extra={"error": str(exc), "qdrant_url": settings.qdrant_url})
         # Qdrant Cloud may front requests differently than a local node, so
         # fall back to a lightweight authenticated API call that still proves
         # the cluster is reachable and serving traffic.
@@ -68,5 +71,9 @@ def _qdrant_ready() -> bool:
             request = Request(f"{settings.qdrant_url.rstrip('/')}/collections", headers=headers)
             with urlopen(request, timeout=3) as response:
                 return response.status == 200
-        except Exception:
+        except Exception as fallback_exc:
+            logger.warning(
+                "Fallback Qdrant readiness probe failed",
+                extra={"error": str(fallback_exc), "qdrant_url": settings.qdrant_url},
+            )
             return False
