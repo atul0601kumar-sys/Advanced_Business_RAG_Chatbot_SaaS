@@ -35,6 +35,14 @@ class FakeDeletePipeline:
         self.deleted_documents.append((str(document.workspace_id), str(document.id)))
 
 
+class FakeMissingQdrantDeletePipeline:
+    def remove_document_index(self, document: Document) -> None:  # noqa: ARG002
+        raise RuntimeError(
+            "Qdrant request failed with HTTP 404: "
+            '{"status":{"error":"Not found: Collection \\"document_chunks\\" doesn\'t exist!"}}'
+        )
+
+
 class DocumentServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_root = Path.cwd() / ".tmp-test-storage"
@@ -103,6 +111,54 @@ class DocumentServiceTests(unittest.TestCase):
             self.assertEqual(list_documents_for_workspace(db, workspace.id), [])
             self.assertFalse(Path(stored_document.storage_path).exists())
             self.assertEqual(fake_pipeline.deleted_documents, [(str(workspace.id), str(upload.id))])
+
+    def test_delete_ignores_missing_qdrant_vectors_for_stale_document(self) -> None:
+        with self.SessionLocal() as db:
+            user = User(
+                email="stale.delete@example.com",
+                full_name="Stale Delete",
+                password_hash="hashed",
+                is_active=True,
+                is_superuser=False,
+            )
+            db.add(user)
+            db.flush()
+
+            workspace = Workspace(
+                name="Stale Document Cleanup",
+                slug=f"stale-docs-{uuid.uuid4().hex[:8]}",
+                description="Temp workspace for stale cleanup tests.",
+                status="active",
+                owner_user_id=user.id,
+            )
+            db.add(workspace)
+            db.flush()
+            db.add(WorkspaceMember(workspace_id=workspace.id, user_id=user.id, role="admin"))
+            db.commit()
+
+            upload = create_document_from_upload(
+                db=db,
+                workspace_id=workspace.id,
+                current_user=user,
+                filename="legacy.txt",
+                mime_type="text/plain",
+                file_size=len(b"legacy content"),
+                content_base64=base64.b64encode(b"legacy content").decode("utf-8"),
+            )
+
+            stored_document = db.scalar(select(Document).where(Document.id == upload.id))
+            self.assertIsNotNone(stored_document)
+            self.assertTrue(Path(stored_document.storage_path).exists())
+
+            delete_document(
+                db,
+                workspace.id,
+                upload.id,
+                pipeline=FakeMissingQdrantDeletePipeline(),  # type: ignore[arg-type]
+            )
+
+            self.assertIsNone(db.scalar(select(Document).where(Document.id == upload.id)))
+            self.assertFalse(Path(stored_document.storage_path).exists())
 
 
 if __name__ == "__main__":

@@ -21,6 +21,11 @@ from app.core.input_validator import validate_file_signature
 from app.services.index_pipeline import IndexPipeline, run_indexing_job
 
 
+def _is_benign_qdrant_delete_error(exc: Exception) -> bool:
+    message = str(exc)
+    return "Qdrant request failed with HTTP 404" in message or "Not found: Collection" in message
+
+
 def serialize_document(document: Document) -> DocumentSummary:
     return DocumentSummary(
         id=document.id,
@@ -127,10 +132,11 @@ def delete_document(
     try:
         (pipeline or IndexPipeline()).remove_document_index(document)
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Failed to delete document vectors from Qdrant: {exc}",
-        ) from exc
+        if not _is_benign_qdrant_delete_error(exc):
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to delete document vectors from Qdrant: {exc}",
+            ) from exc
     remove_original_file(document.storage_path)
     for chunk in list(document.chunks):
         db.delete(chunk)
