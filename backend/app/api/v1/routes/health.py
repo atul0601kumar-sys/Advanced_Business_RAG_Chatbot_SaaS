@@ -63,7 +63,7 @@ def _qdrant_ready() -> bool:
         with urlopen(request, timeout=3) as response:
             return response.status == 200
     except Exception as exc:
-        logger.warning("Primary Qdrant readiness probe failed", extra={"error": str(exc), "qdrant_url": settings.qdrant_url})
+        logger.warning("Primary Qdrant readiness probe failed: %s (url=%s)", exc, settings.qdrant_url)
         # Qdrant Cloud may front requests differently than a local node, so
         # fall back to a lightweight authenticated API call that still proves
         # the cluster is reachable and serving traffic.
@@ -72,8 +72,5 @@ def _qdrant_ready() -> bool:
             with urlopen(request, timeout=3) as response:
                 return response.status == 200
         except Exception as fallback_exc:
-            logger.warning(
-                "Fallback Qdrant readiness probe failed",
-                extra={"error": str(fallback_exc), "qdrant_url": settings.qdrant_url},
-            )
+            logger.warning("Fallback Qdrant readiness probe failed: %s (url=%s)", fallback_exc, settings.qdrant_url)
             return False
