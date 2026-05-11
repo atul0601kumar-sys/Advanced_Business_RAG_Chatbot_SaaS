@@ -18,9 +18,12 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         request_id = request.headers.get("X-Request-ID") or str(uuid4())
         token = _request_id_ctx.set(request_id)
         request.state.request_id = request_id
+        response = None
         try:
             response = await call_next(request)
         finally:
             _request_id_ctx.reset(token)
+        if response is None:
+            raise RuntimeError("Request processing completed without a response.")
         response.headers.setdefault("X-Request-ID", request_id)
         return response
