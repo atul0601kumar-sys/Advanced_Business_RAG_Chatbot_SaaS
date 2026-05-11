@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from time import perf_counter
 import uuid
 
@@ -10,6 +11,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.access_control import get_client_ip
 from app.db.session import SessionLocal
 from app.models import AccessLog, AuditLog
+
+logger = logging.getLogger(__name__)
 
 
 class AuditAction:
@@ -65,10 +68,13 @@ class SecurityAuditMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             return response
         finally:
-            with SessionLocal() as db:
-                self._persist_access_log(db, request, response, started)
-                self._persist_audit_events(db, request)
-                db.commit()
+            try:
+                with SessionLocal() as db:
+                    self._persist_access_log(db, request, response, started)
+                    self._persist_audit_events(db, request)
+                    db.commit()
+            except Exception:
+                logger.exception("Failed to persist security audit telemetry")
 
     def _persist_access_log(self, db: Session, request: Request, response, started_at: float) -> None:  # noqa: ANN001
         latency_ms = int((perf_counter() - started_at) * 1000)
