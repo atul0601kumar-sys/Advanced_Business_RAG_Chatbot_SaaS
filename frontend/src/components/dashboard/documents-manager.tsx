@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ErrorState, LoadingGrid } from "@/components/dashboard/page-states";
 import { useToast } from "@/components/toast-provider";
-import { apiBaseUrl, apiRequest } from "@/lib/auth";
+import { apiBaseUrl, apiRequest, buildApiHeaders } from "@/lib/auth";
 
 type Workspace = {
   id: string;
@@ -252,7 +252,10 @@ export function DocumentsManager() {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", `${apiBaseUrl}/api/v1/workspaces/${selectedWorkspaceId}/documents`);
         xhr.withCredentials = true;
-        xhr.setRequestHeader("Content-Type", "application/json");
+        const headers = buildApiHeaders({ "Content-Type": "application/json" }, "POST");
+        headers.forEach((value, key) => {
+          xhr.setRequestHeader(key, value);
+        });
 
         xhr.upload.onprogress = (event) => {
           if (!event.lengthComputable) {
