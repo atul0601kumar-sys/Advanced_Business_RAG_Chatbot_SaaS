@@ -1,0 +1,36 @@
+{
+  "name": "advanced-business-rag-chatbot-saas",
+  "private": true,
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev:frontend": "npm --workspace frontend run dev",
+    "build:frontend": "npm --workspace frontend run build",
+    "build:widget": "npm --workspace frontend run build:widget",
+    "start:frontend": "npm --workspace frontend run start",
+    "docker:build": "docker compose build",
+    "docker:start": "docker compose up -d",
+    "docker:stop": "docker compose down",
+    "docker:restart": "docker compose down && docker compose up -d",
+    "docker:logs": "docker compose logs -f --tail=200",
+    "docker:migrate": "docker compose run --rm backend alembic upgrade head",
+    "docker:rollback": "docker compose run --rm backend alembic downgrade -1",
+    "test": "npm run test:backend && npm run test:frontend && npm run test:e2e",
+    "test:backend": "node ./scripts/run-backend-pytest.mjs",
+    "test:backend:failed": "node ./scripts/run-backend-pytest.mjs --last-failed",
+    "test:frontend": "npm --workspace frontend run test",
+    "test:frontend:watch": "npm --workspace frontend run test:watch",
+    "test:frontend:failed": "npm --workspace frontend run test:failed",
+    "test:e2e": "node ./scripts/run-playwright-e2e.mjs",
+    "test:e2e:failed": "node ./scripts/run-playwright-e2e.mjs --last-failed",
+    "test:e2e:cross-browser": "set PLAYWRIGHT_INCLUDE_FIREFOX=1&& set PLAYWRIGHT_INCLUDE_EDGE=1&& node --max-old-space-size=4096 ./node_modules/@playwright/test/cli.js test --project=chromium --project=firefox --project=edge --project=mobile-chrome --project=mobile-edge",
+    "test:watch": "npm run test:frontend:watch",
+    "test:failed": "npm run test:backend:failed && npm run test:frontend:failed && npm run test:e2e:failed",
+    "test:ci": "npm run test:backend && npm run test:frontend && node --max-old-space-size=4096 ./node_modules/@playwright/test/cli.js test --reporter=line",
+    "test:predeploy": "npm run test:ci && node ./scripts/predeploy-check.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2"
+  }
+}

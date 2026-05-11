@@ -1,0 +1,65 @@
+from __future__ import annotations
+
+import json
+import time
+import urllib.error
+import urllib.request
+
+from app.core.config import get_settings
+
+settings = get_settings()
+
+
+class OpenAIEmbedder:
+    def __init__(
+        self,
+        api_key: str,
+        model: str | None = None,
+        batch_size: int | None = None,
+        max_retries: int | None = None,
+        endpoint: str = "https://api.openai.com/v1/embeddings",
+    ) -> None:
+        self.api_key = api_key
+        self.model = model or settings.openai_embedding_model
+        self.batch_size = batch_size or settings.openai_embedding_batch_size
+        self.max_retries = max_retries or settings.openai_max_retries
+        self.endpoint = endpoint
+
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        embeddings: list[list[float]] = []
+        for start in range(0, len(texts), self.batch_size):
+            batch = texts[start : start + self.batch_size]
+            embeddings.extend(self._request_batch(batch))
+        return embeddings
+
+    def _request_batch(self, batch: list[str]) -> list[list[float]]:
+        if not self.api_key or self.api_key == "your_openai_api_key":
+            raise RuntimeError("OpenAI API key is not configured for embeddings.")
+
+        payload = json.dumps({"model": self.model, "input": batch}).encode("utf-8")
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        for attempt in range(self.max_retries):
+            request = urllib.request.Request(self.endpoint, data=payload, headers=headers, method="POST")
+            try:
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    body = json.loads(response.read().decode("utf-8"))
+                    ordered = sorted(body["data"], key=lambda item: item["index"])
+                    return [item["embedding"] for item in ordered]
+            except urllib.error.HTTPError as exc:
+                should_retry = exc.code in {408, 409, 429, 500, 502, 503, 504}
+                if not should_retry or attempt == self.max_retries - 1:
+                    detail = exc.read().decode("utf-8", errors="ignore")
+                    raise RuntimeError(f"Embedding request failed with HTTP {exc.code}: {detail}") from exc
+                time.sleep(2 ** attempt)
+            except urllib.error.URLError as exc:
+                if attempt == self.max_retries - 1:
+                    raise RuntimeError(f"Embedding request failed: {exc.reason}") from exc
+                time.sleep(2 ** attempt)
+        raise RuntimeError("Embedding request exhausted all retries.")
+

@@ -1,0 +1,90 @@
+name: Build And Deploy
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          npm install
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements-dev.txt
+
+      - name: Run full test suite
+        run: npm run test:ci
+
+      - name: Build frontend production bundle
+        run: npm run build:frontend
+
+  docker:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read release version
+        id: version
+        run: echo "value=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: ${{ secrets.GHCR_USERNAME != '' && secrets.GHCR_TOKEN != '' }}
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: ${{ secrets.GHCR_USERNAME != '' && secrets.GHCR_TOKEN != '' }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/rag-backend:${{ steps.version.outputs.value }}
+            ghcr.io/${{ github.repository_owner }}/rag-backend:${{ steps.version.outputs.value }}-${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/rag-backend:latest
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./frontend/Dockerfile
+          push: ${{ secrets.GHCR_USERNAME != '' && secrets.GHCR_TOKEN != '' }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/rag-frontend:${{ steps.version.outputs.value }}
+            ghcr.io/${{ github.repository_owner }}/rag-frontend:${{ steps.version.outputs.value }}-${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/rag-frontend:latest
+
+  deploy:
+    needs: docker
+    runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' }}
+    steps:
+      - name: Trigger Render backend deploy
+        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
+        run: curl -fsSL -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+      - name: Trigger Vercel frontend deploy
+        if: ${{ secrets.VERCEL_DEPLOY_HOOK_URL != '' }}
+        run: curl -fsSL -X POST "${{ secrets.VERCEL_DEPLOY_HOOK_URL }}"

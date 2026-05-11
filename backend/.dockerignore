@@ -1,0 +1,14 @@
+.venv
+__pycache__
+.pytest_cache
+tests
+.coverage
+coverage.xml
+coverage_html
+*.pyc
+*.pyo
+*.pyd
+storage
+backend-test-storage-*
+pytest-cache-files-*
+.tmp-*

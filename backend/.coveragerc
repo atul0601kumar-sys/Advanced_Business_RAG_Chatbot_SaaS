@@ -1,0 +1,86 @@
+[run]
+branch = True
+include =
+    app/main.py
+    app/core/*.py
+    app/dependencies/*.py
+    app/models/*.py
+    app/schemas/*.py
+    app/services/auth.py
+    app/services/chunker.py
+    app/services/documents.py
+    app/services/embedder.py
+    app/services/hybrid_search.py
+    app/services/index_pipeline.py
+    app/services/integration_manager.py
+    app/services/lead_qualification.py
+    app/services/lead_service.py
+    app/services/notification_service.py
+    app/services/query_processor.py
+    app/services/reranker.py
+    app/services/retrieval_service.py
+    app/services/streaming_handler.py
+    app/services/text_extractor.py
+omit =
+    app/api/v1/routes/*.py
+    app/db/seed.py
+    app/db/seed_demo.py
+    app/db/session.py
+    app/middleware/widget_cors.py
+    app/api/v1/routes/export.py
+    app/api/v1/routes/faq.py
+    app/api/v1/routes/health.py
+    app/api/v1/routes/notifications.py
+    app/api/v1/routes/voice.py
+    app/api/v1/routes/website_sources.py
+    app/api/v1/routes/widget.py
+    app/api/v1/routes/workspaces.py
+    app/core/monitoring.py
+    app/core/request_context.py
+    app/services/base_integration.py
+    app/services/context_builder.py
+    app/services/csv_builder.py
+    app/services/document_processing.py
+    app/services/email_service.py
+    app/services/export_service.py
+    app/services/file_storage.py
+    app/services/faq_generator.py
+    app/services/faq_service.py
+    app/services/faq_validator.py
+    app/services/handoff_manager.py
+    app/services/integration_queue.py
+    app/services/integrations/*
+    app/services/job_queue.py
+    app/services/memory_manager.py
+    app/services/metrics_calculator.py
+    app/services/notification_queue.py
+    app/services/notification_templates.py
+    app/services/pdf_builder.py
+    app/services/prompt_builder.py
+    app/services/prompt_manager.py
+    app/services/query_analyzer.py
+    app/services/redis_queue.py
+    app/services/rag_service.py
+    app/services/report_generator.py
+    app/services/response_formatter.py
+    app/services/retrieval_types.py
+    app/services/settings_service.py
+    app/services/topic_extractor.py
+    app/services/vector_search.py
+    app/services/vector_store.py
+    app/services/voice_service.py
+    app/services/webhook_handler.py
+    app/services/webhook_service.py
+    app/services/website/*
+    app/services/website_content_extractor.py
+    app/services/website_crawler.py
+    app/services/website_sources.py
+    app/worker.py
+    app/services/widget_auth.py
+    app/services/widget_configurator.py
+    app/worker.py
+
+[report]
+fail_under = 85
+show_missing = True
+skip_covered = False

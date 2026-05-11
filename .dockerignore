@@ -1,0 +1,13 @@
+node_modules
+frontend/node_modules
+backend/node_modules
+.next
+.next-e2e
+frontend/.next
+frontend/.next-e2e
+coverage
+frontend/coverage
+backend/coverage
+test-results
+frontend/test-results
+playwright-report

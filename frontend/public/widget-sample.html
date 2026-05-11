@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Widget Sample</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, sans-serif;
+        background: linear-gradient(180deg, #f8fafc, #e2e8f0);
+        color: #0f172a;
+      }
+
+      main {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 72px 24px 160px;
+      }
+
+      h1 {
+        font-size: clamp(2rem, 4vw, 4rem);
+        margin-bottom: 0.75rem;
+      }
+
+      p {
+        max-width: 70ch;
+        line-height: 1.7;
+      }
+
+      .card {
+        margin-top: 2rem;
+        padding: 1.5rem;
+        border-radius: 1.5rem;
+        background: rgba(255, 255, 255, 0.8);
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+      }
+
+      code {
+        display: block;
+        padding: 1rem;
+        overflow: auto;
+        border-radius: 1rem;
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Embeddable Widget Demo</h1>
+      <p>
+        This page simulates how the standalone widget behaves on a plain HTML site. Update the
+        workspace id and API base URL to match your local environment.
+      </p>
+
+      <div class="card">
+        <strong>Embed snippet</strong>
+        <code>
+&lt;script
+  src="http://localhost:3000/widget.js"
+  data-workspace-id="REPLACE_WITH_WORKSPACE_ID"
+  data-api-base-url="http://localhost:8000"
+  data-position="right"
+  data-theme="light"
+  data-color="#0ea5e9"
+  data-welcome-message="Hi there. Ask about pricing, onboarding, or policies."
+&gt;&lt;/script&gt;
+        </code>
+      </div>
+
+      <div class="card">
+        <p>
+          The widget uses Shadow DOM isolation, session persistence, streaming chat, inline lead
+          capture, and public workspace settings sync.
+        </p>
+      </div>
+    </main>
+
+    <script
+      src="http://localhost:3000/widget.js"
+      data-workspace-id="REPLACE_WITH_WORKSPACE_ID"
+      data-api-base-url="http://localhost:8000"
+      data-position="right"
+      data-theme="light"
+      data-color="#0ea5e9"
+      data-welcome-message="Hi there. Ask about pricing, onboarding, or policies."
+    ></script>
+  </body>
+</html>

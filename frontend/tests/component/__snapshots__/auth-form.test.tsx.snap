@@ -1,0 +1,106 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`supports keyboard navigation, submission, and snapshot coverage for signup 1`] = `
+<DocumentFragment>
+  <div
+    class="w-full max-w-md rounded-3xl border border-white/10 bg-slate-950/80 p-8 shadow-2xl shadow-blue-950/20"
+  >
+    <div
+      class="space-y-2"
+    >
+      <p
+        class="text-sm uppercase tracking-[0.2em] text-blue-200/80"
+      >
+        Create workspace
+      </p>
+      <h1
+        class="text-3xl font-semibold text-white"
+      >
+        Start your account
+      </h1>
+    </div>
+    <form
+      class="mt-8 space-y-4"
+    >
+      <label
+        class="block space-y-2"
+      >
+        <span
+          class="text-sm text-slate-300"
+        >
+          Full name
+        </span>
+        <input
+          class="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500"
+          placeholder="Aarav Singh"
+          required=""
+          value="QA User"
+        />
+      </label>
+      <label
+        class="block space-y-2"
+      >
+        <span
+          class="text-sm text-slate-300"
+        >
+          Workspace name
+        </span>
+        <input
+          class="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500"
+          placeholder="Acme Revenue Team"
+          required=""
+          value="Alpha Workspace"
+        />
+      </label>
+      <label
+        class="block space-y-2"
+      >
+        <span
+          class="text-sm text-slate-300"
+        >
+          Email
+        </span>
+        <input
+          class="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500"
+          placeholder="you@example.com"
+          required=""
+          type="email"
+          value="qa@example.com"
+        />
+      </label>
+      <label
+        class="block space-y-2"
+      >
+        <span
+          class="text-sm text-slate-300"
+        >
+          Password
+        </span>
+        <input
+          class="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500"
+          placeholder="••••••••"
+          required=""
+          type="password"
+          value="CorrectHorseBatteryStaple!"
+        />
+      </label>
+      <button
+        class="w-full rounded-2xl bg-blue-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+        type="submit"
+      >
+        Create account
+      </button>
+    </form>
+    <p
+      class="mt-6 text-sm text-slate-400"
+    >
+      Already have an account? 
+      <a
+        href="/login"
+      >
+        Login
+      </a>
+    </p>
+  </div>
+</DocumentFragment>
+`;
