@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     postgres_password: str = "rag_password"
     postgres_port: int = 5432
     qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str = ""
     qdrant_port: int = 6333
     qdrant_grpc_port: int = 6334
     qdrant_collection_name: str = "document_chunks"

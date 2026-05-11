@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
@@ -52,8 +52,21 @@ def _database_ready() -> bool:
 
 
 def _qdrant_ready() -> bool:
+    headers = {}
+    if settings.qdrant_api_key.strip():
+        headers["api-key"] = settings.qdrant_api_key.strip()
+
     try:
-        with urlopen(f"{settings.qdrant_url.rstrip('/')}/readyz", timeout=3) as response:
+        request = Request(f"{settings.qdrant_url.rstrip('/')}/readyz", headers=headers)
+        with urlopen(request, timeout=3) as response:
             return response.status == 200
     except Exception:
-        return False
+        # Qdrant Cloud may front requests differently than a local node, so
+        # fall back to a lightweight authenticated API call that still proves
+        # the cluster is reachable and serving traffic.
+        try:
+            request = Request(f"{settings.qdrant_url.rstrip('/')}/collections", headers=headers)
+            with urlopen(request, timeout=3) as response:
+                return response.status == 200
+        except Exception:
+            return False

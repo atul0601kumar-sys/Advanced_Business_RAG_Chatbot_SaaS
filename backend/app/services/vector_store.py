@@ -29,6 +29,7 @@ class QdrantVectorStore:
         max_retries: int | None = None,
     ) -> None:
         self.base_url = (base_url or settings.qdrant_url).rstrip("/")
+        self.api_key = settings.qdrant_api_key.strip()
         self.collection_name = collection_name or settings.qdrant_collection_name
         self.distance_metric = distance_metric or settings.qdrant_distance_metric
         self.max_retries = max_retries or settings.openai_max_retries
@@ -122,6 +123,8 @@ class QdrantVectorStore:
         url = urllib.parse.urljoin(f"{self.base_url}/", path.lstrip("/"))
         data = json.dumps(payload).encode("utf-8") if payload is not None else None
         headers = {"Content-Type": "application/json"} if payload is not None else {}
+        if self.api_key:
+            headers["api-key"] = self.api_key
 
         for attempt in range(self.max_retries):
             request = urllib.request.Request(url, data=data, headers=headers, method=method)

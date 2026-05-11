@@ -58,6 +58,22 @@ def test_qdrant_store_retries_after_transient_network_failure(monkeypatch):
     assert attempts["count"] == 2
 
 
+def test_qdrant_store_sends_api_key_header_when_configured(monkeypatch):
+    captured_headers = {}
+
+    def fake_urlopen(request, timeout=30):  # noqa: ARG001
+        captured_headers.update(dict(request.header_items()))
+        return FakeResponse({"status": "ok", "result": []})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    store = QdrantVectorStore(base_url="http://qdrant.test", max_retries=1)
+    store.api_key = "test-qdrant-key"
+
+    assert store.search_points([1.0, 2.0], {"must": []}, 5) == []
+    assert captured_headers["Api-key"] == "test-qdrant-key"
+
+
 def test_qdrant_store_surfaces_clear_error_after_retries(monkeypatch):
     monkeypatch.setattr(
         "urllib.request.urlopen",
