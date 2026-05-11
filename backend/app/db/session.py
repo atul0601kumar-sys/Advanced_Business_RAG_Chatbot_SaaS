@@ -9,6 +9,7 @@ engine = create_engine(
     settings.resolved_database_url,
     echo=settings.database_echo,
     future=True,
+    connect_args={"prepare_threshold": None},
 )
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
