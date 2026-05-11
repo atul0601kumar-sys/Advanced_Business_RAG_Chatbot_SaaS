@@ -116,6 +116,16 @@ export function DocumentsManager() {
     return "Metadata extracted";
   }
 
+  function renderDocumentDescription(document: DocumentSummary) {
+    if (document.ingestion_status === "failed") {
+      const processingError = document.metadata_json?.["processing_error"];
+      if (typeof processingError === "string" && processingError.trim()) {
+        return processingError;
+      }
+    }
+    return document.summary ?? "No summary available yet.";
+  }
+
   useEffect(() => {
     let active = true;
     async function loadWorkspaces() {
@@ -574,9 +584,7 @@ export function DocumentsManager() {
                       {document.ingestion_status}
                     </span>
                   </div>
-                  <p className="mt-3 text-sm text-slate-400">
-                    {document.summary ?? "No summary available yet."}
-                  </p>
+                  <p className="mt-3 text-sm text-slate-400">{renderDocumentDescription(document)}</p>
                   <div className="mt-4 flex flex-wrap gap-3 text-xs text-slate-500">
                     <span>{document.mime_type ?? "Unknown MIME"}</span>
                     <span>{formatBytes(document.file_size)}</span>
