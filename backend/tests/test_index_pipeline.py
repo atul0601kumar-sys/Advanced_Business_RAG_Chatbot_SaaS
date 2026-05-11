@@ -42,6 +42,11 @@ class FakeVectorStore:
         self.deleted_documents.append((workspace_id, document_id))
 
 
+class EmptyChunker:
+    def chunk_document(self, extracted) -> list:  # noqa: ANN001
+        return []
+
+
 class IndexPipelineTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_root = Path.cwd() / ".tmp-test-indexing"
@@ -150,6 +155,53 @@ class IndexPipelineTests(unittest.TestCase):
 
             pipeline.remove_document_index(document)
             self.assertEqual(vector_store.deleted_documents[-1], (str(workspace.id), str(document.id)))
+
+    def test_pipeline_rejects_zero_chunk_documents(self) -> None:
+        embedder = FakeEmbedder()
+        vector_store = FakeVectorStore()
+        pipeline = IndexPipeline(chunker=EmptyChunker(), embedder=embedder, vector_store=vector_store)
+
+        with self.SessionLocal() as db:
+            user = User(
+                email="empty.chunk@example.com",
+                full_name="Empty Chunk",
+                password_hash="hashed",
+                is_active=True,
+                is_superuser=False,
+            )
+            db.add(user)
+            db.flush()
+
+            workspace = Workspace(
+                name="Empty Chunk Workspace",
+                slug=f"empty-chunk-{uuid.uuid4().hex[:8]}",
+                description="Pipeline tests.",
+                status="active",
+                owner_user_id=user.id,
+            )
+            db.add(workspace)
+            db.flush()
+            db.add(WorkspaceMember(workspace_id=workspace.id, user_id=user.id, role="admin"))
+            db.flush()
+
+            document = Document(
+                workspace_id=workspace.id,
+                uploaded_by_user_id=user.id,
+                title="report.txt",
+                source_type="file",
+                storage_path=str(self.temp_dir / "report.txt"),
+                mime_type="text/plain",
+                file_size=120,
+                checksum="checksum",
+                ingestion_status="pending",
+                metadata_json={"original_filename": "report.txt"},
+            )
+            db.add(document)
+            db.commit()
+            db.refresh(document)
+
+            with self.assertRaisesRegex(RuntimeError, "No extractable text chunks"):
+                pipeline.index_document(db, document, b"Short text that otherwise validates.")
 
 
 if __name__ == "__main__":
