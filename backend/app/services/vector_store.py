@@ -28,7 +28,7 @@ class QdrantVectorStore:
         distance_metric: str | None = None,
         max_retries: int | None = None,
     ) -> None:
-        self.base_url = (base_url or settings.qdrant_url).rstrip("/")
+        self.base_url = (base_url or settings.qdrant_url).strip().rstrip("/")
         self.api_key = settings.qdrant_api_key.strip()
         self.collection_name = collection_name or settings.qdrant_collection_name
         self.distance_metric = distance_metric or settings.qdrant_distance_metric

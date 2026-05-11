@@ -57,20 +57,21 @@ def _qdrant_ready() -> bool:
     headers = {}
     if settings.qdrant_api_key.strip():
         headers["api-key"] = settings.qdrant_api_key.strip()
+    qdrant_base_url = settings.qdrant_url.strip().rstrip("/")
 
     try:
-        request = Request(f"{settings.qdrant_url.rstrip('/')}/readyz", headers=headers)
+        request = Request(f"{qdrant_base_url}/readyz", headers=headers)
         with urlopen(request, timeout=3) as response:
             return response.status == 200
     except Exception as exc:
-        logger.warning("Primary Qdrant readiness probe failed: %s (url=%s)", exc, settings.qdrant_url)
+        logger.warning("Primary Qdrant readiness probe failed: %s (url=%s)", exc, qdrant_base_url)
         # Qdrant Cloud may front requests differently than a local node, so
         # fall back to a lightweight authenticated API call that still proves
         # the cluster is reachable and serving traffic.
         try:
-            request = Request(f"{settings.qdrant_url.rstrip('/')}/collections", headers=headers)
+            request = Request(f"{qdrant_base_url}/collections", headers=headers)
             with urlopen(request, timeout=3) as response:
                 return response.status == 200
         except Exception as fallback_exc:
-            logger.warning("Fallback Qdrant readiness probe failed: %s (url=%s)", fallback_exc, settings.qdrant_url)
+            logger.warning("Fallback Qdrant readiness probe failed: %s (url=%s)", fallback_exc, qdrant_base_url)
             return False
