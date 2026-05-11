@@ -8,6 +8,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import urlparse
 
 from fastapi import HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
@@ -227,13 +228,34 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         "/api/v1/health",
     }
 
+    @staticmethod
+    def _extract_origin(value: str | None) -> str:
+        if not value:
+            return ""
+        parsed = urlparse(value)
+        if parsed.scheme and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}"
+        return value.strip()
+
+    @classmethod
+    def _is_trusted_frontend_origin(cls, request: Request) -> bool:
+        allowed_origins = {
+            origin.strip().rstrip("/")
+            for origin in (settings.cors_allowed_origins or [settings.frontend_url])
+            if origin.strip()
+        }
+        origin = cls._extract_origin(request.headers.get("Origin")).rstrip("/")
+        referer_origin = cls._extract_origin(request.headers.get("Referer")).rstrip("/")
+        return origin in allowed_origins or referer_origin in allowed_origins
+
     async def dispatch(self, request: Request, call_next):
         if request.method not in self.SAFE_METHODS and request.url.path not in self.EXEMPT_PATHS:
             using_cookie_auth = "access_token" in request.cookies and not request.headers.get("Authorization")
             if using_cookie_auth:
                 csrf_cookie = request.cookies.get("csrf_token")
                 csrf_header = request.headers.get("X-CSRF-Token")
-                if not csrf_cookie or not csrf_header or not hmac.compare_digest(csrf_cookie, csrf_header):
+                csrf_valid = bool(csrf_cookie and csrf_header and hmac.compare_digest(csrf_cookie, csrf_header))
+                if not csrf_valid and not self._is_trusted_frontend_origin(request):
                     flag_suspicious_request(
                         request,
                         action=AuditAction.SUSPICIOUS_REQUEST,
