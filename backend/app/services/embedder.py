@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import time
 import urllib.error
 import urllib.request
@@ -97,7 +99,38 @@ class LocalFastEmbedder:
         return self._embedding_model
 
 
+class HashingEmbedder:
+    def __init__(self, dimensions: int | None = None) -> None:
+        self.dimensions = dimensions or settings.hash_embedding_dimensions
+        self.model = f"hash-embedding-{self.dimensions}"
+
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        return [self._embed_single(text) for text in texts]
+
+    def _embed_single(self, text: str) -> list[float]:
+        vector = [0.0] * self.dimensions
+        tokens = [token for token in text.lower().split() if token]
+        if not tokens:
+            return vector
+
+        for token in tokens:
+            digest = hashlib.sha256(token.encode("utf-8")).digest()
+            bucket = int.from_bytes(digest[:8], "big") % self.dimensions
+            sign = 1.0 if digest[8] % 2 == 0 else -1.0
+            weight = 1.0 + (digest[9] / 255.0)
+            vector[bucket] += sign * weight
+
+        norm = math.sqrt(sum(value * value for value in vector))
+        if norm == 0.0:
+            return vector
+        return [value / norm for value in vector]
+
+
 def get_default_embedder() -> EmbeddingClient:
+    if settings.embedding_provider == "hash":
+        return HashingEmbedder()
     if settings.embedding_provider == "local":
         return LocalFastEmbedder()
     return OpenAIEmbedder(api_key=settings.openai_api_key)
