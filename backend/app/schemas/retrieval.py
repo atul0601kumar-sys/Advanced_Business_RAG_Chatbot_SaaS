@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 class RetrievalFiltersRequest(BaseModel):
     document_id: uuid.UUID | None = None
+    document_ids: list[uuid.UUID] = Field(default_factory=list)
     file_name: str | None = None
     file_type: str | None = None
     upload_date: date | None = None
@@ -39,4 +40,3 @@ class RetrievalResponse(BaseModel):
     query: str
     results: list[RetrievalResultItem]
     final_chunks_count: int
-

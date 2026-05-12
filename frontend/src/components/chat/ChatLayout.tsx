@@ -24,6 +24,7 @@ import {
   streamChatMessage,
   submitChatFeedback,
   type ChatMode,
+  type ChatRetrievalFilters,
   type LeadCapturePrompt,
   type LeadCaptureSettings,
   type LeadSummary,
@@ -37,7 +38,12 @@ import {
   getInitialThemeMode,
   type ChatThemeMode,
 } from "@/lib/chat-settings";
-import { fetchChatbotSettings, type ChatbotSettingsResponse } from "@/lib/settings";
+import {
+  fetchChatbotSettings,
+  fetchWorkspaceDocuments,
+  type ChatbotSettingsResponse,
+  type DocumentSummary,
+} from "@/lib/settings";
 import type { BookingSummary } from "@/lib/scheduling";
 import { useVoiceChat } from "@/lib/voice/use-voice-chat";
 import type { UiMessage } from "@/components/chat/MessageBubble";
@@ -129,6 +135,9 @@ export function ChatLayout({ initialView = "chat" }: ChatLayoutProps) {
   const [confirmedBooking, setConfirmedBooking] = useState<BookingSummary | null>(null);
   const [chatbotSettings, setChatbotSettings] = useState<ChatbotSettingsResponse | null>(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [workspaceDocuments, setWorkspaceDocuments] = useState<DocumentSummary[]>([]);
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
+  const [documentFilterOpen, setDocumentFilterOpen] = useState(false);
 
   const settings = chatbotSettings
     ? {
@@ -178,6 +187,39 @@ export function ChatLayout({ initialView = "chat" }: ChatLayoutProps) {
     setHiddenSessionIds(getStoredJson<string[]>(HIDDEN_SESSIONS_KEY, []));
     setTitleOverrides(getStoredJson<Record<string, string>>(SESSION_TITLE_OVERRIDES_KEY, {}));
   }, []);
+
+  useEffect(() => {
+    if (!workspaceId) {
+      setWorkspaceDocuments([]);
+      setSelectedDocumentIds([]);
+      return;
+    }
+
+    let active = true;
+
+    async function loadWorkspaceDocuments() {
+      try {
+        const documents = await fetchWorkspaceDocuments(workspaceId);
+        if (!active) {
+          return;
+        }
+        setWorkspaceDocuments(documents);
+        setSelectedDocumentIds((current) =>
+          current.filter((documentId) => documents.some((document) => document.id === documentId)),
+        );
+      } catch {
+        if (!active) {
+          return;
+        }
+        setWorkspaceDocuments([]);
+      }
+    }
+
+    void loadWorkspaceDocuments();
+    return () => {
+      active = false;
+    };
+  }, [workspaceId]);
 
   useEffect(() => {
     if (!voiceError) {
@@ -292,10 +334,24 @@ export function ChatLayout({ initialView = "chat" }: ChatLayoutProps) {
   );
   const activeMessages = activeSessionId ? messagesBySession[activeSessionId] ?? [] : [];
   const activeSession = visibleSessions.find((session) => session.id === activeSessionId) ?? null;
+  const selectedDocuments = useMemo(
+    () => workspaceDocuments.filter((document) => selectedDocumentIds.includes(document.id)),
+    [selectedDocumentIds, workspaceDocuments],
+  );
+  const activeChatFilters: ChatRetrievalFilters | undefined =
+    selectedDocumentIds.length > 0 ? { documentIds: selectedDocumentIds } : undefined;
 
   function updateTheme(nextTheme: ChatThemeMode) {
     setThemeMode(nextTheme);
     window.localStorage.setItem(CHAT_THEME_STORAGE_KEY, nextTheme);
+  }
+
+  function toggleDocumentSelection(documentId: string) {
+    setSelectedDocumentIds((current) =>
+      current.includes(documentId)
+        ? current.filter((id) => id !== documentId)
+        : [...current, documentId],
+    );
   }
 
   async function refreshSessions(targetSessionId?: string) {
@@ -403,7 +459,7 @@ export function ChatLayout({ initialView = "chat" }: ChatLayoutProps) {
 
     try {
       await streamChatMessage(
-        { sessionId, message: trimmed, mode },
+        { sessionId, message: trimmed, mode, filters: activeChatFilters },
         {
           onStart: ({ generation_id, message_id }) => {
             setCurrentGenerationId(generation_id);
@@ -509,7 +565,7 @@ export function ChatLayout({ initialView = "chat" }: ChatLayoutProps) {
     }
     setIsGenerating(true);
     try {
-      const result = await regenerateChatResponse(activeSessionId, mode);
+      const result = await regenerateChatResponse(activeSessionId, mode, activeChatFilters);
       setMessagesBySession((current) => {
         const sessionMessages = [...(current[activeSessionId] ?? [])];
         for (let index = sessionMessages.length - 1; index >= 0; index -= 1) {
@@ -749,6 +805,58 @@ export function ChatLayout({ initialView = "chat" }: ChatLayoutProps) {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <button
+                  className="rounded-full border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:border-white/20 hover:text-white"
+                  onClick={() => setDocumentFilterOpen((current) => !current)}
+                  type="button"
+                >
+                  {selectedDocumentIds.length === 0
+                    ? "All documents"
+                    : selectedDocumentIds.length === 1
+                      ? selectedDocuments[0]?.title ?? "1 document"
+                      : `${selectedDocumentIds.length} documents`}
+                </button>
+                {documentFilterOpen ? (
+                  <div className="absolute right-0 z-20 mt-2 w-[22rem] rounded-3xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur">
+                    <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+                      <p className="text-sm font-medium text-white">Chat scope</p>
+                      <button
+                        className="text-xs text-slate-400 transition hover:text-white"
+                        onClick={() => setSelectedDocumentIds([])}
+                        type="button"
+                      >
+                        All documents
+                      </button>
+                    </div>
+                    <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">
+                      {workspaceDocuments.length ? (
+                        workspaceDocuments.map((document) => {
+                          const checked = selectedDocumentIds.includes(document.id);
+                          return (
+                            <label
+                              key={document.id}
+                              className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 px-3 py-2 text-sm text-slate-200 transition hover:border-white/20"
+                            >
+                              <input
+                                checked={checked}
+                                className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent text-cyan-400 focus:ring-cyan-400"
+                                onChange={() => toggleDocumentSelection(document.id)}
+                                type="checkbox"
+                              />
+                              <span className="min-w-0 break-words">{document.title}</span>
+                            </label>
+                          );
+                        })
+                      ) : (
+                        <p className="rounded-2xl border border-white/10 px-3 py-3 text-sm text-slate-400">
+                          No indexed documents are available yet.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
               <button
                 className="rounded-full border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:border-white/20 hover:text-white"
                 onClick={handleClearChat}
@@ -790,6 +898,33 @@ export function ChatLayout({ initialView = "chat" }: ChatLayoutProps) {
               <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-400">
                 Preparing your chat workspace...
               </div>
+            ) : null}
+            {selectedDocuments.length ? (
+              <section className="rounded-[1.6rem] border border-cyan-400/15 bg-cyan-400/10 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium uppercase tracking-[0.3em] text-cyan-100/70">
+                    Active document filters
+                  </span>
+                  {selectedDocuments.map((document) => (
+                    <button
+                      key={document.id}
+                      className="inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-400/10 px-3 py-1 text-sm text-cyan-50 transition hover:border-cyan-200/40 hover:bg-cyan-400/15"
+                      onClick={() => toggleDocumentSelection(document.id)}
+                      type="button"
+                    >
+                      <span className="max-w-[18rem] truncate">{document.title}</span>
+                      <span className="text-cyan-200/70">x</span>
+                    </button>
+                  ))}
+                  <button
+                    className="text-sm text-cyan-200/80 transition hover:text-white"
+                    onClick={() => setSelectedDocumentIds([])}
+                    type="button"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </section>
             ) : null}
             <>
                 <ChatWindow

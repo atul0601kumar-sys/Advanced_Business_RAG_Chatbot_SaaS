@@ -17,6 +17,9 @@ export type CurrentUser = {
 export type ChatMode = "concise" | "detailed" | "bullet";
 export type ConfidenceLabel = "High" | "Medium" | "Low";
 export type FeedbackValue = "up" | "down";
+export type ChatRetrievalFilters = {
+  documentIds?: string[];
+};
 
 export type Citation = {
   document_id?: string | null;
@@ -214,11 +217,16 @@ export async function fetchChatHistory(sessionId: string): Promise<ChatHistoryRe
 export async function regenerateChatResponse(
   sessionId: string,
   mode: ChatMode,
+  filters?: ChatRetrievalFilters,
 ): Promise<ChatAnswerResponse> {
   return requestJson<ChatAnswerResponse>("/api/v1/chat/regenerate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ session_id: sessionId, mode }),
+    body: JSON.stringify({
+      session_id: sessionId,
+      mode,
+      filters: serializeChatFilters(filters),
+    }),
   });
 }
 
@@ -377,6 +385,7 @@ export async function streamChatMessage(
     sessionId: string;
     message: string;
     mode: ChatMode;
+    filters?: ChatRetrievalFilters;
   },
   handlers: StreamHandlers,
 ): Promise<void> {
@@ -389,6 +398,7 @@ export async function streamChatMessage(
         session_id: payload.sessionId,
         message: payload.message,
         mode: payload.mode,
+        filters: serializeChatFilters(payload.filters),
       }),
     });
   } catch {
@@ -439,6 +449,14 @@ export async function streamChatMessage(
       handlers.onComplete?.(parsed.data as ChatAnswerResponse);
     }
   }
+}
+
+function serializeChatFilters(filters?: ChatRetrievalFilters): { document_ids: string[] } | undefined {
+  const documentIds = filters?.documentIds?.filter(Boolean) ?? [];
+  if (!documentIds.length) {
+    return undefined;
+  }
+  return { document_ids: documentIds };
 }
 
 function parseSseFrame(frame: string): { event: string; data: unknown } | null {

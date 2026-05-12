@@ -10,6 +10,7 @@ import uuid
 class RetrievalFilters:
     workspace_id: uuid.UUID
     document_id: uuid.UUID | None = None
+    document_ids: list[uuid.UUID] = field(default_factory=list)
     file_name: str | None = None
     file_type: str | None = None
     upload_date: date | None = None

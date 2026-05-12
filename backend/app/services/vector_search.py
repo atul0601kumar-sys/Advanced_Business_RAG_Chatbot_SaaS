@@ -30,7 +30,14 @@ class VectorSearcher:
         top_k: int = 20,
     ) -> VectorSearchResult:
         search_filter = {"filter": {"must": [{"key": "workspace_id", "match": {"value": str(filters.workspace_id)}}]}}
-        if filters.document_id:
+        if filters.document_ids:
+            search_filter["filter"]["must"].append(
+                {
+                    "key": "document_id",
+                    "match": {"any": [str(document_id) for document_id in filters.document_ids]},
+                }
+            )
+        elif filters.document_id:
             search_filter["filter"]["must"].append({"key": "document_id", "match": {"value": str(filters.document_id)}})
         if filters.file_name:
             search_filter["filter"]["must"].append({"key": "file_name", "match": {"value": filters.file_name}})

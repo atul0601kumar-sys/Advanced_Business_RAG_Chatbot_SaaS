@@ -269,6 +269,25 @@ class RetrievalPipelineTests(unittest.TestCase):
             self.assertAlmostEqual(result.hits[0].vector_score, 0.92)
             self.assertEqual(store.last_filter["must"][0]["match"]["value"], str(workspace.id))
 
+    def test_vector_search_supports_multiple_document_filters(self) -> None:
+        workspace, document = self._seed_chunks()
+        other_document_id = uuid.uuid4()
+        with self.SessionLocal() as db:
+            store = FakeVectorStore()
+            searcher = VectorSearcher(store)
+            filters = RetrievalFilters(
+                workspace_id=workspace.id,
+                document_ids=[document.id, other_document_id],
+            )
+            searcher.search(db, [0.1, 0.2], filters, top_k=20)
+
+            document_filter = store.last_filter["must"][1]
+            self.assertEqual(document_filter["key"], "document_id")
+            self.assertEqual(
+                document_filter["match"]["any"],
+                [str(document.id), str(other_document_id)],
+            )
+
     def test_keyword_search_applies_workspace_and_file_filters(self) -> None:
         workspace, document = self._seed_chunks()
         with self.SessionLocal() as db:
@@ -284,6 +303,19 @@ class RetrievalPipelineTests(unittest.TestCase):
             self.assertEqual(len(result.hits), 1)
             self.assertEqual(result.hits[0].chunk_id, "point-1")
             self.assertGreater(result.hits[0].keyword_score, 0)
+
+    def test_keyword_search_supports_multiple_document_filters(self) -> None:
+        workspace, document = self._seed_chunks()
+        with self.SessionLocal() as db:
+            searcher = KeywordSearcher(FilterEngine())
+            filters = RetrievalFilters(
+                workspace_id=workspace.id,
+                document_ids=[document.id],
+            )
+            result = searcher.search(db, "revenue onboarding q1", filters, top_k=20)
+
+            self.assertEqual(len(result.hits), 1)
+            self.assertTrue(all(hit.metadata["document_id"] == str(document.id) for hit in result.hits))
 
     def test_hybrid_search_combines_and_deduplicates(self) -> None:
         hybrid = HybridSearcher()
