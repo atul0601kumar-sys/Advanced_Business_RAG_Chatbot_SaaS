@@ -47,6 +47,11 @@ class IndexPipeline:
         extracted = extract_text(document.title, document.mime_type or "application/octet-stream", file_bytes)
         chunk_drafts = self.chunker.chunk_document(extracted)
         if not chunk_drafts:
+            if extracted.metadata.get("file_type") == "pdf":
+                raise RuntimeError(
+                    "No extractable text chunks were produced from the document. "
+                    "This PDF may be scanned, image-based, or use unsupported text encoding; OCR support is not configured yet."
+                )
             raise RuntimeError("No extractable text chunks were produced from the document.")
         payloads = self.metadata_builder.build_chunk_payloads(document, chunk_drafts)
         embeddings = self.embedder.embed_texts([payload.content for payload in payloads])

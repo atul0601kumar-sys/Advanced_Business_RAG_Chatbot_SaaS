@@ -2,6 +2,7 @@ import shutil
 import unittest
 import uuid
 from pathlib import Path
+from unittest.mock import patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -9,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from app.db.base import Base
 from app.models import Document, DocumentChunk, User, Workspace, WorkspaceMember
 from app.services.index_pipeline import IndexPipeline
+from app.services.text_extractor import ExtractedDocument
 from app.services.text_extractor import settings as extractor_settings
 
 
@@ -202,6 +204,63 @@ class IndexPipelineTests(unittest.TestCase):
 
             with self.assertRaisesRegex(RuntimeError, "No extractable text chunks"):
                 pipeline.index_document(db, document, b"Short text that otherwise validates.")
+
+    def test_pipeline_surfaces_pdf_ocr_hint_when_no_text_is_extractable(self) -> None:
+        embedder = FakeEmbedder()
+        vector_store = FakeVectorStore()
+        pipeline = IndexPipeline(embedder=embedder, vector_store=vector_store)
+
+        with self.SessionLocal() as db:
+            user = User(
+                email="pdf.ocr@example.com",
+                full_name="PDF OCR",
+                password_hash="hashed",
+                is_active=True,
+                is_superuser=False,
+            )
+            db.add(user)
+            db.flush()
+
+            workspace = Workspace(
+                name="PDF OCR Workspace",
+                slug=f"pdf-ocr-{uuid.uuid4().hex[:8]}",
+                description="PDF OCR hint tests.",
+                status="active",
+                owner_user_id=user.id,
+            )
+            db.add(workspace)
+            db.flush()
+            db.add(WorkspaceMember(workspace_id=workspace.id, user_id=user.id, role="admin"))
+            db.flush()
+
+            document = Document(
+                workspace_id=workspace.id,
+                uploaded_by_user_id=user.id,
+                title="scan.pdf",
+                source_type="file",
+                storage_path=str(self.temp_dir / "scan.pdf"),
+                mime_type="application/pdf",
+                file_size=120,
+                checksum="checksum",
+                ingestion_status="pending",
+                metadata_json={"original_filename": "scan.pdf"},
+            )
+            db.add(document)
+            db.commit()
+            db.refresh(document)
+
+            extracted = ExtractedDocument(
+                full_text="",
+                cleaned_text="",
+                sections=[],
+                metadata={"file_type": "pdf", "ocr_recommended": True},
+            )
+
+            with (
+                patch("app.services.index_pipeline.extract_text", return_value=extracted),
+                self.assertRaisesRegex(RuntimeError, "OCR support is not configured yet"),
+            ):
+                pipeline.index_document(db, document, b"%PDF placeholder")
 
 
 if __name__ == "__main__":

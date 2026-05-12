@@ -14,6 +14,11 @@ from zipfile import ZipFile
 
 from fastapi import HTTPException, status
 
+try:
+    from pypdf import PdfReader
+except ImportError:  # pragma: no cover - exercised in environments without the optional dependency
+    PdfReader = None
+
 from app.core.config import get_settings
 from app.core.input_validator import sanitize_text, validate_file_signature
 from app.services.file_storage import get_storage_service
@@ -323,6 +328,10 @@ def _extract_pdf_stream_text(stream_bytes: bytes) -> str:
 
 
 def _extract_pdf(file_bytes: bytes, filename: str) -> ExtractedDocument:
+    extracted_with_library = _extract_pdf_with_pypdf(file_bytes, filename)
+    if extracted_with_library and extracted_with_library.sections:
+        return extracted_with_library
+
     text_blob = file_bytes.decode("latin-1", errors="ignore")
     page_matches = list(re.finditer(rb"/Type\s*/Page\b", file_bytes))
     object_map = {
@@ -373,5 +382,54 @@ def _extract_pdf(file_bytes: bytes, filename: str) -> ExtractedDocument:
         "file_type": "pdf",
         "page_count": len(page_matches),
         "pdf_info": _extract_pdf_info(text_blob),
+        "ocr_recommended": not bool(sections),
+    }
+    return ExtractedDocument(raw_text, cleaned_text, sections, metadata)
+
+
+def _extract_pdf_with_pypdf(file_bytes: bytes, filename: str) -> ExtractedDocument | None:
+    if PdfReader is None:
+        return None
+
+    try:
+        reader = PdfReader(io.BytesIO(file_bytes))
+    except Exception:  # noqa: BLE001
+        return None
+
+    pages: list[list[str]] = []
+    for page in reader.pages:
+        try:
+            page_text = page.extract_text() or ""
+        except Exception:  # noqa: BLE001
+            page_text = ""
+        pages.append([line for line in page_text.splitlines() if line.strip()])
+
+    cleaned_pages = _remove_repeated_pdf_noise(pages)
+    sections: list[ExtractedSection] = []
+    for index, lines in enumerate(cleaned_pages, start=1):
+        page_text = _collapse_lines(lines)
+        if page_text:
+            sections.append(
+                ExtractedSection(
+                    text=page_text,
+                    order=len(sections),
+                    section_type="page",
+                    page_number=index,
+                )
+            )
+
+    raw_text = "\n\n".join(section.text for section in sections)
+    cleaned_text = _normalize_whitespace(raw_text)
+    metadata = {
+        "original_filename": filename,
+        "file_type": "pdf",
+        "page_count": len(reader.pages),
+        "pdf_info": {
+            str(key).lstrip("/").lower(): str(value)
+            for key, value in (reader.metadata or {}).items()
+            if value is not None
+        },
+        "extraction_strategy": "pypdf",
+        "ocr_recommended": not bool(sections),
     }
     return ExtractedDocument(raw_text, cleaned_text, sections, metadata)
