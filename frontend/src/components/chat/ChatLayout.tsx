@@ -195,11 +195,12 @@ export function ChatLayout({ initialView = "chat" }: ChatLayoutProps) {
       return;
     }
 
+    const currentWorkspaceId = workspaceId;
     let active = true;
 
     async function loadWorkspaceDocuments() {
       try {
-        const documents = await fetchWorkspaceDocuments(workspaceId);
+        const documents = await fetchWorkspaceDocuments(currentWorkspaceId);
         if (!active) {
           return;
         }
