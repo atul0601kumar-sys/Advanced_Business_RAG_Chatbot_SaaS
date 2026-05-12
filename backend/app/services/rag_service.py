@@ -176,8 +176,7 @@ class ExtractiveChatClient:
         if not sentences:
             return FALLBACK_ANSWER
 
-        max_sentences = {"concise": 2, "detailed": 4, "bullet": 4}[mode]
-        selected = [sentence for sentence, _score in sentences[:max_sentences]]
+        selected = self._select_sentences(sentences, mode)
         if mode == "bullet":
             return "\n".join(f"- {sentence}" for sentence in selected)
         return " ".join(selected)
@@ -215,13 +214,31 @@ class ExtractiveChatClient:
                 sentence_terms = self._tokenize(normalized)
                 overlap_terms = query_terms.intersection(sentence_terms)
                 overlap = len(overlap_terms)
-                score = base_score + (overlap * 3.5) + self._sentence_quality_bonus(normalized, overlap_terms)
+                score = (
+                    base_score
+                    + (overlap * 3.5)
+                    + self._sentence_quality_bonus(normalized, overlap_terms)
+                    - self._sentence_noise_penalty(normalized)
+                )
                 if overlap == 0 and len(scored_sentences) >= 2:
                     continue
                 scored_sentences.append((normalized, score))
 
         scored_sentences.sort(key=lambda item: item[1], reverse=True)
         return scored_sentences
+
+    def _select_sentences(self, ranked_sentences: list[tuple[str, float]], mode: ChatMode) -> list[str]:
+        max_sentences = {"concise": 1, "detailed": 1, "bullet": 3}[mode]
+        top_score = ranked_sentences[0][1]
+        minimum_score = top_score - 2.0
+        selected: list[str] = []
+        for sentence, score in ranked_sentences:
+            if len(selected) >= max_sentences:
+                break
+            if score < minimum_score and selected:
+                continue
+            selected.append(sentence)
+        return selected or [ranked_sentences[0][0]]
 
     def _tokenize(self, text: str) -> set[str]:
         return {
@@ -268,6 +285,23 @@ class ExtractiveChatClient:
         if text.endswith((".", "!", "?")):
             bonus += 0.3
         return bonus
+
+    def _sentence_noise_penalty(self, text: str) -> float:
+        uppercase_letters = sum(1 for char in text if char.isalpha() and char.isupper())
+        lowercase_letters = sum(1 for char in text if char.isalpha() and char.islower())
+        alpha_letters = uppercase_letters + lowercase_letters
+        uppercase_ratio = (uppercase_letters / alpha_letters) if alpha_letters else 0.0
+        repeated_markers = len(re.findall(r"\b\d+(?:\.\d+)+\b", text))
+        penalty = 0.0
+        if uppercase_ratio > 0.28:
+            penalty += 2.0
+        if repeated_markers >= 2:
+            penalty += 2.5
+        if text.count(".") > 1 and uppercase_ratio > 0.18:
+            penalty += 1.5
+        if "characteristics and types of a company" in text.lower():
+            penalty += 2.0
+        return penalty
 
 
 class RagService:

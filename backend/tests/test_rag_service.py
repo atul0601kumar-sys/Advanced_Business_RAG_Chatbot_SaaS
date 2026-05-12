@@ -73,6 +73,24 @@ class NoisyCompanyKnowledgeRetrievalService:
                     ),
                 ),
                 RetrievalResultItem(
+                    chunk_id="company-private-heading",
+                    text=(
+                        "Characteristics or Features of a Private Company. MEANING, CHARACTERISTICS AND TYPES OF "
+                        "A COMPANY 1.3 Characteristics of a Company company by altering its Articles in such a "
+                        "manner that they no longer include essential clauses."
+                    ),
+                    vector_score=0.89,
+                    keyword_score=0.68,
+                    hybrid_score=0.84,
+                    rerank_score=0.9,
+                    metadata=RetrievalResultMetadata(
+                        document_id="doc-company",
+                        file_name="Introduction to Company.pdf",
+                        page_number=23,
+                        workspace_id=str(workspace_id),
+                    ),
+                ),
+                RetrievalResultItem(
                     chunk_id="company-explanation",
                     text=(
                         "The main characteristics of a company include separate legal entity, perpetual succession, "
@@ -145,3 +163,5 @@ def test_rag_service_prefers_explanatory_sentences_over_outline_noise(db_session
     assert "separate legal entity" in answer_lower
     assert "limited liability" in answer_lower
     assert "lesson 1.0" not in answer_lower
+    assert "characteristics and types of a company" not in answer_lower
+    assert "private company" not in answer_lower
