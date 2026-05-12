@@ -238,6 +238,18 @@ class ExtractiveChatClient:
             if score < minimum_score and selected:
                 continue
             selected.append(sentence)
+        if (
+            mode == "detailed"
+            and selected
+            and self._needs_follow_up_sentence(selected[0])
+            and len(ranked_sentences) > 1
+        ):
+            for sentence, score in ranked_sentences[1:]:
+                if score < minimum_score:
+                    continue
+                if sentence not in selected:
+                    selected.append(sentence)
+                    break
         return selected or [ranked_sentences[0][0]]
 
     def _tokenize(self, text: str) -> set[str]:
@@ -302,6 +314,10 @@ class ExtractiveChatClient:
         if "characteristics and types of a company" in text.lower():
             penalty += 2.0
         return penalty
+
+    def _needs_follow_up_sentence(self, text: str) -> bool:
+        words = text.split()
+        return text.rstrip().endswith(":") or len(words) < 8
 
 
 class RagService:
