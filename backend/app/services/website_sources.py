@@ -13,10 +13,10 @@ from app.db.session import SessionLocal
 from app.models import Document, User, WebsiteSource
 from app.schemas.website_source import WebsiteSourceSummary
 from app.services.event_tracker import EventTracker
+from app.services.embedder import EmbeddingClient, get_default_embedder
 from app.services.text_extractor import remove_original_file
 from app.services.vector_store import QdrantVectorStore
 from app.services.website.chunker import WebsiteChunker
-from app.services.website.embedder import WebsiteEmbedder
 from app.services.website.website_indexer import WebsiteIndexer
 from app.services.faq_service import FAQService
 from app.services.website_crawler import (
@@ -246,7 +246,7 @@ def _crawl_and_index_source(
     crawler: WebsiteCrawler | None = None,
     chunker: WebsiteChunker | None = None,
     metadata_builder: object | None = None,
-    embedder: WebsiteEmbedder | None = None,
+    embedder: EmbeddingClient | None = None,
     vector_store: QdrantVectorStore | None = None,
 ) -> None:
     if not source.document:
@@ -279,7 +279,7 @@ def _crawl_and_index_source(
         raise RuntimeError("No readable pages were extracted from the provided URL.")
     indexer = WebsiteIndexer(
         chunker=chunker or WebsiteChunker(),
-        embedder=embedder or WebsiteEmbedder(api_key=settings.openai_api_key),
+        embedder=embedder or get_default_embedder(),
         vector_store=vector_store or QdrantVectorStore(),
     )
     crawled.pages = indexer.deduplicate_pages(crawled.pages)

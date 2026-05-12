@@ -8,11 +8,11 @@ from difflib import SequenceMatcher
 from sqlalchemy.orm import Session
 
 from app.models import Document, DocumentChunk, WebsiteSource
+from app.services.embedder import EmbeddingClient
 from app.services.metadata_builder import MetadataBuilder
 from app.services.text_extractor import remove_original_file, store_original_file, stored_file_exists
 from app.services.vector_store import QdrantVectorStore, VectorPoint
 from app.services.website.chunker import WebsiteChunker
-from app.services.website.embedder import WebsiteEmbedder
 from app.services.website.html_parser import ExtractedWebPage, build_document_from_pages
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class WebsiteIndexer:
         *,
         chunker: WebsiteChunker | None = None,
         metadata_builder: MetadataBuilder | None = None,
-        embedder: WebsiteEmbedder | None = None,
+        embedder: EmbeddingClient | None = None,
         vector_store: QdrantVectorStore | None = None,
     ) -> None:
         self.chunker = chunker or WebsiteChunker()

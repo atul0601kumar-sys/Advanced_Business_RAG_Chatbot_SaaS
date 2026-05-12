@@ -4,10 +4,19 @@ import json
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
+from typing import Protocol
 
 from app.core.config import get_settings
 
 settings = get_settings()
+
+
+class EmbeddingClient(Protocol):
+    model: str
+
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        ...
 
 
 class OpenAIEmbedder:
@@ -63,3 +72,32 @@ class OpenAIEmbedder:
                 time.sleep(2 ** attempt)
         raise RuntimeError("Embedding request exhausted all retries.")
 
+
+class LocalFastEmbedder:
+    def __init__(self, model: str | None = None, cache_dir: str | None = None) -> None:
+        self.model = model or settings.local_embedding_model
+        self.cache_dir = cache_dir or settings.local_embedding_cache_dir
+        self._embedding_model = None
+
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        model = self._get_model()
+        vectors = list(model.embed(texts))
+        return [vector.tolist() for vector in vectors]
+
+    def _get_model(self):
+        if self._embedding_model is None:
+            try:
+                from fastembed import TextEmbedding
+            except ImportError as exc:  # pragma: no cover - exercised in runtime environments without dependency
+                raise RuntimeError("Local embedding provider is not installed. Add fastembed to the backend runtime.") from exc
+            Path(self.cache_dir).mkdir(parents=True, exist_ok=True)
+            self._embedding_model = TextEmbedding(model_name=self.model, cache_dir=self.cache_dir)
+        return self._embedding_model
+
+
+def get_default_embedder() -> EmbeddingClient:
+    if settings.embedding_provider == "local":
+        return LocalFastEmbedder()
+    return OpenAIEmbedder(api_key=settings.openai_api_key)

@@ -9,7 +9,7 @@ from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.models import Document, DocumentChunk
 from app.services.chunker import SmartChunker
-from app.services.embedder import OpenAIEmbedder
+from app.services.embedder import EmbeddingClient, get_default_embedder
 from app.services.faq_service import FAQService
 from app.services.metadata_builder import MetadataBuilder
 from app.services.text_extractor import extract_text, read_stored_file
@@ -31,12 +31,12 @@ class IndexPipeline:
         self,
         chunker: SmartChunker | None = None,
         metadata_builder: MetadataBuilder | None = None,
-        embedder: OpenAIEmbedder | None = None,
+        embedder: EmbeddingClient | None = None,
         vector_store: QdrantVectorStore | None = None,
     ) -> None:
         self.chunker = chunker or SmartChunker()
         self.metadata_builder = metadata_builder or MetadataBuilder()
-        self.embedder = embedder or OpenAIEmbedder(api_key=settings.openai_api_key)
+        self.embedder = embedder or get_default_embedder()
         self.vector_store = vector_store or QdrantVectorStore()
 
     def index_document(self, db: Session, document: Document, file_bytes: bytes) -> IndexResult:

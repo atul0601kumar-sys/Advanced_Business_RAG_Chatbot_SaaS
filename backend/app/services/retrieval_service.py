@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.schemas.retrieval import RetrievalResponse, RetrievalResultItem, RetrievalResultMetadata
 from app.services.context_builder import ContextBuilder
-from app.services.embedder import OpenAIEmbedder
+from app.services.embedder import get_default_embedder
 from app.services.filter_engine import FilterEngine
 from app.services.hybrid_search import HybridSearcher
 from app.services.keyword_search import KeywordSearcher
@@ -35,7 +35,7 @@ class RetrievalService:
         context_builder: ContextBuilder | None = None,
         settings_service: SettingsService | None = None,
     ) -> None:
-        embedder = OpenAIEmbedder(api_key=settings.openai_api_key)
+        embedder = get_default_embedder()
         self.filter_engine = filter_engine or FilterEngine()
         self.query_processor = query_processor or QueryProcessor(embedder)
         self.vector_searcher = vector_searcher or VectorSearcher(QdrantVectorStore())

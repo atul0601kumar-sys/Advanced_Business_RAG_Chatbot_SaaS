@@ -11,3 +11,4 @@ reportlab==4.2.5
 redis==5.2.1
 sentry-sdk[fastapi]==2.29.1
 pypdf==5.5.0
+fastembed==0.3.6

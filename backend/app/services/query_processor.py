@@ -5,7 +5,7 @@ import re
 from collections import OrderedDict
 from dataclasses import dataclass
 
-from app.services.embedder import OpenAIEmbedder
+from app.services.embedder import EmbeddingClient
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class ProcessedQuery:
 class QueryProcessor:
     _embedding_cache: "OrderedDict[str, list[float]]" = OrderedDict()
 
-    def __init__(self, embedder: OpenAIEmbedder, cache_size: int = 256) -> None:
+    def __init__(self, embedder: EmbeddingClient, cache_size: int = 256) -> None:
         self.embedder = embedder
         self.cache_size = cache_size
 
@@ -78,4 +78,3 @@ class QueryProcessor:
         while len(cache) > self.cache_size:
             cache.popitem(last=False)
         return embedding
-

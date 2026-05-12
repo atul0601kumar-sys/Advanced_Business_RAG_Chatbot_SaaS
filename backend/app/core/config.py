@@ -60,8 +60,11 @@ class Settings(BaseSettings):
     qdrant_grpc_port: int = 6334
     qdrant_collection_name: str = "document_chunks"
     qdrant_distance_metric: str = "Cosine"
+    embedding_provider: str = "local"
     openai_embedding_model: str = "text-embedding-3-small"
     openai_embedding_batch_size: int = 16
+    local_embedding_model: str = "BAAI/bge-small-en-v1.5"
+    local_embedding_cache_dir: str = "/tmp/fastembed-cache"
     openai_max_retries: int = 4
     openai_reranker_model: str = "gpt-4.1-mini"
     openai_chat_model: str = "gpt-4.1-mini"
@@ -190,6 +193,15 @@ class Settings(BaseSettings):
         allowed = {"local", "s3", "supabase"}
         if normalized not in allowed:
             raise ValueError(f"storage_backend must be one of: {', '.join(sorted(allowed))}")
+        return normalized
+
+    @field_validator("embedding_provider")
+    @classmethod
+    def validate_embedding_provider(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        allowed = {"openai", "local"}
+        if normalized not in allowed:
+            raise ValueError(f"embedding_provider must be one of: {', '.join(sorted(allowed))}")
         return normalized
 
     @model_validator(mode="after")
