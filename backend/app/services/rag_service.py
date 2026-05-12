@@ -133,6 +133,78 @@ class OpenAIChatClient:
         raise RuntimeError("Chat generation exhausted all retries.")
 
 
+class OllamaChatClient:
+    def __init__(
+        self,
+        model: str | None = None,
+        max_retries: int | None = None,
+        base_url: str | None = None,
+    ) -> None:
+        self.model = model or settings.ollama_chat_model
+        self.max_retries = max_retries or settings.openai_max_retries
+        self.base_url = (base_url or settings.ollama_base_url).rstrip("/")
+        self.endpoint = f"{self.base_url}/api/chat"
+
+    def complete(self, messages: list[dict[str, str]]) -> str:
+        payload = self._build_payload(messages, stream=False)
+        response_body = self._request(payload, stream=False)
+        return response_body["message"]["content"]
+
+    def stream(self, messages: list[dict[str, str]], stop_event: threading.Event | None = None):
+        payload = self._build_payload(messages, stream=True)
+        request = urllib.request.Request(
+            self.endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=120) as response:
+            for raw_line in response:
+                if stop_event and stop_event.is_set():
+                    break
+                line = raw_line.decode("utf-8", errors="ignore").strip()
+                if not line:
+                    continue
+                payload = json.loads(line)
+                if "error" in payload:
+                    raise RuntimeError(f"Ollama chat generation failed: {payload['error']}")
+                delta = payload.get("message", {}).get("content", "")
+                if delta:
+                    yield delta
+                if payload.get("done"):
+                    break
+
+    def _build_payload(self, messages: list[dict[str, str]], *, stream: bool) -> dict:
+        return {
+            "model": self.model,
+            "messages": messages,
+            "stream": stream,
+            "options": {
+                "temperature": 0.1,
+            },
+        }
+
+    def _request(self, payload: dict, *, stream: bool) -> dict:
+        body = json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        for attempt in range(self.max_retries):
+            request = urllib.request.Request(self.endpoint, data=body, headers=headers, method="POST")
+            try:
+                with urllib.request.urlopen(request, timeout=120) as response:
+                    return json.loads(response.read().decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                should_retry = exc.code in {408, 409, 429, 500, 502, 503, 504}
+                if not should_retry or attempt == self.max_retries - 1:
+                    detail = exc.read().decode("utf-8", errors="ignore")
+                    raise RuntimeError(f"Ollama chat generation failed with HTTP {exc.code}: {detail}") from exc
+                time.sleep(2 ** attempt)
+            except urllib.error.URLError as exc:
+                if attempt == self.max_retries - 1:
+                    raise RuntimeError(f"Ollama chat generation failed: {exc.reason}") from exc
+                time.sleep(2 ** attempt)
+        raise RuntimeError("Ollama chat generation exhausted all retries.")
+
+
 class ExtractiveChatClient:
     _STOPWORDS = {
         "a",
@@ -431,9 +503,16 @@ class RagService:
         self.retrieval_service = retrieval_service or RetrievalService()
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.response_formatter = response_formatter or ResponseFormatter()
-        self.chat_client = chat_client or OpenAIChatClient(api_key=settings.openai_api_key)
         self.extractive_chat_client = ExtractiveChatClient()
-        self.chat_provider = chat_provider or ("openai" if chat_client is not None else settings.chat_provider)
+        self.chat_provider = chat_provider or settings.chat_provider
+        if chat_client is not None:
+            self.chat_client = chat_client
+            if chat_provider is None:
+                self.chat_provider = "openai"
+        elif self.chat_provider == "ollama":
+            self.chat_client = OllamaChatClient()
+        else:
+            self.chat_client = OpenAIChatClient(api_key=settings.openai_api_key)
         self.prompt_manager = prompt_manager or PromptManager()
         self.settings_service = settings_service or SettingsService()
         self.faq_service = faq_service or FAQService()

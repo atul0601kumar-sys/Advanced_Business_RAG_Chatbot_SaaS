@@ -270,6 +270,39 @@ def test_rag_service_rewrites_direct_answer_from_includes_sentence(db_session, s
     assert "limited liability" in answer_lower
 
 
+class StubOllamaChatClient:
+    def complete(self, messages):  # noqa: ANN001
+        return "A company is characterized by separate legal entity, perpetual succession, and limited liability."
+
+    def stream(self, messages, stop_event=None):  # noqa: ANN001
+        yield "A company is characterized by separate legal entity, perpetual succession, and limited liability."
+
+
+def test_rag_service_supports_ollama_provider_with_custom_client(db_session, seeded_workspace):
+    service = RagService(
+        retrieval_service=CompanyKnowledgeRetrievalService(),
+        chat_client=StubOllamaChatClient(),
+        chat_provider="ollama",
+    )
+
+    response = asyncio.run(
+        service.generate_answer(
+            db_session,
+            seeded_workspace.workspace_id,
+            "What are the characteristics of a company?",
+            "detailed",
+            None,
+            memory=_memory_snapshot(),
+            prior_messages=[],
+        )
+    )
+
+    answer_lower = response.answer.lower()
+    assert "separate legal entity" in answer_lower
+    assert response.metadata.answer_strategy == "rag"
+    assert len(response.citations) >= 1
+
+
 class HeadingOnlyTopHitRetrievalService:
     async def retrieve(self, db, workspace_id, query, request_filters):  # noqa: ARG002
         return RetrievalResponse(
