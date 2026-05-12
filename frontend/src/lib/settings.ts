@@ -153,6 +153,14 @@ export type WorkspaceSummary = {
 export type DocumentSummary = {
   id: string;
   title: string;
+  mime_type?: string | null;
+  file_size?: number | null;
+  ingestion_status?: "pending" | "processing" | "indexed" | "failed";
+  metadata_json?: Record<string, unknown> | null;
+  summary?: string | null;
+  chunk_count: number;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export type WebsiteSourceSummary = {
