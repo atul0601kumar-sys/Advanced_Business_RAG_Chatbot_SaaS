@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     qdrant_collection_name: str = "document_chunks"
     qdrant_distance_metric: str = "Cosine"
     embedding_provider: str = "hash"
+    chat_provider: str = "extractive"
     openai_embedding_model: str = "text-embedding-3-small"
     openai_embedding_batch_size: int = 16
     hash_embedding_dimensions: int = 256
@@ -203,6 +204,15 @@ class Settings(BaseSettings):
         allowed = {"hash", "openai", "local"}
         if normalized not in allowed:
             raise ValueError(f"embedding_provider must be one of: {', '.join(sorted(allowed))}")
+        return normalized
+
+    @field_validator("chat_provider")
+    @classmethod
+    def validate_chat_provider(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        allowed = {"extractive", "openai"}
+        if normalized not in allowed:
+            raise ValueError(f"chat_provider must be one of: {', '.join(sorted(allowed))}")
         return normalized
 
     @model_validator(mode="after")

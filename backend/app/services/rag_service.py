@@ -3,12 +3,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import threading
 import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from typing import AsyncIterator
+from typing import AsyncIterator, Protocol
 
 from sqlalchemy.orm import Session
 
@@ -42,6 +43,14 @@ class RagStreamEvent:
     event_type: str
     token: str = ""
     result: ChatAnswerResponse | None = None
+
+
+class ChatCompletionClient(Protocol):
+    def complete(self, messages: list[dict[str, str]]) -> str:
+        ...
+
+    def stream(self, messages: list[dict[str, str]], stop_event: threading.Event | None = None):
+        ...
 
 
 class OpenAIChatClient:
@@ -124,21 +133,127 @@ class OpenAIChatClient:
         raise RuntimeError("Chat generation exhausted all retries.")
 
 
+class ExtractiveChatClient:
+    _STOPWORDS = {
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "for",
+        "from",
+        "how",
+        "i",
+        "in",
+        "is",
+        "it",
+        "of",
+        "on",
+        "or",
+        "that",
+        "the",
+        "this",
+        "to",
+        "what",
+        "which",
+        "with",
+        "your",
+    }
+
+    def __init__(self) -> None:
+        self.model = "extractive-rag"
+
+    def complete(
+        self,
+        query: str,
+        results: list[RetrievalResultItem],
+        mode: ChatMode,
+    ) -> str:
+        sentences = self._rank_sentences(query, results)
+        if not sentences:
+            return FALLBACK_ANSWER
+
+        max_sentences = {"concise": 2, "detailed": 4, "bullet": 4}[mode]
+        selected = [sentence for sentence, _score in sentences[:max_sentences]]
+        if mode == "bullet":
+            return "\n".join(f"- {sentence}" for sentence in selected)
+        return " ".join(selected)
+
+    def stream(
+        self,
+        query: str,
+        results: list[RetrievalResultItem],
+        mode: ChatMode,
+        stop_event: threading.Event | None = None,
+    ):
+        answer = self.complete(query, results, mode)
+        for token in answer.split(" "):
+            if stop_event and stop_event.is_set():
+                break
+            yield f"{token} "
+
+    def _rank_sentences(self, query: str, results: list[RetrievalResultItem]) -> list[tuple[str, float]]:
+        query_terms = self._tokenize(query)
+        scored_sentences: list[tuple[str, float]] = []
+        seen: set[str] = set()
+
+        for result in results:
+            base_score = (result.rerank_score * 2.0) + result.vector_score + result.hybrid_score
+            for sentence in self._split_sentences(result.text):
+                normalized = sentence.strip()
+                if not normalized:
+                    continue
+                key = normalized.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                overlap = len(query_terms.intersection(self._tokenize(normalized)))
+                score = base_score + (overlap * 3.0)
+                if overlap == 0 and len(scored_sentences) >= 4:
+                    continue
+                scored_sentences.append((normalized, score))
+
+        scored_sentences.sort(key=lambda item: item[1], reverse=True)
+        return scored_sentences
+
+    def _tokenize(self, text: str) -> set[str]:
+        return {
+            token
+            for token in re.findall(r"[a-z0-9]+", text.lower())
+            if len(token) > 2 and token not in self._STOPWORDS
+        }
+
+    def _split_sentences(self, text: str) -> list[str]:
+        candidates = re.split(r"(?<=[.!?])\s+|\n+", text)
+        sentences: list[str] = []
+        for candidate in candidates:
+            cleaned = " ".join(candidate.strip().split())
+            if cleaned:
+                sentences.append(cleaned)
+        return sentences
+
+
 class RagService:
     def __init__(
         self,
         retrieval_service: RetrievalService | None = None,
         prompt_builder: PromptBuilder | None = None,
         response_formatter: ResponseFormatter | None = None,
-        chat_client: OpenAIChatClient | None = None,
+        chat_client: ChatCompletionClient | None = None,
         prompt_manager: PromptManager | None = None,
         settings_service: SettingsService | None = None,
         faq_service: FAQService | None = None,
+        chat_provider: str | None = None,
     ) -> None:
         self.retrieval_service = retrieval_service or RetrievalService()
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.response_formatter = response_formatter or ResponseFormatter()
         self.chat_client = chat_client or OpenAIChatClient(api_key=settings.openai_api_key)
+        self.extractive_chat_client = ExtractiveChatClient()
+        self.chat_provider = chat_provider or ("openai" if chat_client is not None else settings.chat_provider)
         self.prompt_manager = prompt_manager or PromptManager()
         self.settings_service = settings_service or SettingsService()
         self.faq_service = faq_service or FAQService()
@@ -214,16 +329,24 @@ class RagService:
                 FALLBACK_ANSWER,
                 [],
                 processing_time_ms=int((time.perf_counter() - started) * 1000),
+                answer_strategy="fallback",
             )
-        try:
-            answer = await asyncio.to_thread(self.chat_client.complete, prepared.prompt.messages)
-        except Exception:  # noqa: BLE001
-            logger.exception("LLM completion failed for chat answer", extra={"workspace_id": str(workspace_id)})
-            answer = FALLBACK_ANSWER
+        if self.chat_provider == "extractive":
+            answer = self.extractive_chat_client.complete(query, prepared.results, mode)
+            answer_strategy = "extractive"
+        else:
+            try:
+                answer = await asyncio.to_thread(self.chat_client.complete, prepared.prompt.messages)
+                answer_strategy = "rag"
+            except Exception:  # noqa: BLE001
+                logger.exception("LLM completion failed for chat answer", extra={"workspace_id": str(workspace_id)})
+                answer = FALLBACK_ANSWER
+                answer_strategy = "fallback"
         return self.response_formatter.build_response(
             answer,
             prepared.results,
             processing_time_ms=int((time.perf_counter() - started) * 1000),
+            answer_strategy=answer_strategy,
         )
 
     async def stream_answer(
@@ -277,6 +400,28 @@ class RagService:
                     [],
                     processing_time_ms=int((time.perf_counter() - started) * 1000),
                     stopped=stop_event.is_set(),
+                    answer_strategy="fallback",
+                ),
+            )
+            return
+
+        if self.chat_provider == "extractive":
+            partial = ""
+            for piece in self.extractive_chat_client.stream(query, prepared.results, mode, stop_event=stop_event):
+                if stop_event.is_set():
+                    break
+                partial += piece
+                yield RagStreamEvent(event_type="token", token=piece)
+                await asyncio.sleep(0)
+            answer = partial.strip() or FALLBACK_ANSWER
+            yield RagStreamEvent(
+                event_type="final",
+                result=self.response_formatter.build_response(
+                    answer,
+                    prepared.results,
+                    processing_time_ms=int((time.perf_counter() - started) * 1000),
+                    stopped=stop_event.is_set(),
+                    answer_strategy="extractive",
                 ),
             )
             return
@@ -313,6 +458,7 @@ class RagService:
                 break
 
         answer = "".join(tokens).strip() or FALLBACK_ANSWER
+        answer_strategy = "rag" if tokens else "fallback"
         yield RagStreamEvent(
             event_type="final",
             result=self.response_formatter.build_response(
@@ -320,6 +466,7 @@ class RagService:
                 prepared.results,
                 processing_time_ms=int((time.perf_counter() - started) * 1000),
                 stopped=stop_event.is_set(),
+                answer_strategy=answer_strategy,
             ),
         )
 
