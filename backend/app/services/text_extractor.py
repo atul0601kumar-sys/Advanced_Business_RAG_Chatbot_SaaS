@@ -168,8 +168,36 @@ def _remove_repeated_pdf_noise(lines_per_page: list[list[str]]) -> list[list[str
 
 
 def _collapse_lines(lines: list[str]) -> str:
-    cleaned_lines = [line.strip() for line in lines if line.strip()]
+    cleaned_lines = [_clean_pdf_line(line) for line in lines if line.strip()]
+    cleaned_lines = [line for line in cleaned_lines if line]
     return _normalize_whitespace("\n".join(cleaned_lines))
+
+
+def _clean_pdf_line(line: str) -> str:
+    cleaned = " ".join(line.strip().split())
+    if not cleaned:
+        return ""
+    cleaned = re.sub(r"(\w)-\s+(\w)", r"\1\2", cleaned)
+    if _looks_like_outline_line(cleaned):
+        return ""
+    return cleaned
+
+
+def _looks_like_outline_line(line: str) -> bool:
+    lowered = line.lower()
+    section_markers = len(re.findall(r"\b\d+(?:\.\d+)+\b", line))
+    toc_keywords = {"contents", "chapter", "lesson", "unit", "summary", "objective"}
+    uppercase_letters = sum(1 for char in line if char.isalpha() and char.isupper())
+    lowercase_letters = sum(1 for char in line if char.isalpha() and char.islower())
+    alpha_letters = uppercase_letters + lowercase_letters
+    uppercase_ratio = (uppercase_letters / alpha_letters) if alpha_letters else 0.0
+    is_short_heading = len(line.split()) <= 14 and uppercase_ratio >= 0.45
+    return (
+        section_markers >= 3
+        or ("table of contents" in lowered)
+        or (any(keyword in lowered for keyword in toc_keywords) and section_markers >= 1)
+        or (is_short_heading and section_markers >= 1)
+    )
 
 
 def _extract_txt(file_bytes: bytes, filename: str) -> ExtractedDocument:

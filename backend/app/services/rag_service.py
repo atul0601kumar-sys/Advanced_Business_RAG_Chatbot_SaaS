@@ -206,13 +206,17 @@ class ExtractiveChatClient:
                 normalized = sentence.strip()
                 if not normalized:
                     continue
+                if self._looks_like_outline_noise(normalized):
+                    continue
                 key = normalized.lower()
                 if key in seen:
                     continue
                 seen.add(key)
-                overlap = len(query_terms.intersection(self._tokenize(normalized)))
-                score = base_score + (overlap * 3.0)
-                if overlap == 0 and len(scored_sentences) >= 4:
+                sentence_terms = self._tokenize(normalized)
+                overlap_terms = query_terms.intersection(sentence_terms)
+                overlap = len(overlap_terms)
+                score = base_score + (overlap * 3.5) + self._sentence_quality_bonus(normalized, overlap_terms)
+                if overlap == 0 and len(scored_sentences) >= 2:
                     continue
                 scored_sentences.append((normalized, score))
 
@@ -234,6 +238,36 @@ class ExtractiveChatClient:
             if cleaned:
                 sentences.append(cleaned)
         return sentences
+
+    def _looks_like_outline_noise(self, text: str) -> bool:
+        lowered = text.lower()
+        section_markers = len(re.findall(r"\b\d+(?:\.\d+)+\b", text))
+        uppercase_letters = sum(1 for char in text if char.isalpha() and char.isupper())
+        lowercase_letters = sum(1 for char in text if char.isalpha() and char.islower())
+        alpha_letters = uppercase_letters + lowercase_letters
+        uppercase_ratio = (uppercase_letters / alpha_letters) if alpha_letters else 0.0
+        numeric_ratio = (sum(char.isdigit() for char in text) / max(len(text), 1))
+        looks_heading = text == text.upper() or uppercase_ratio >= 0.45
+        toc_keywords = {"contents", "chapter", "lesson", "unit", "summary"}
+        has_toc_keyword = any(keyword in lowered for keyword in toc_keywords)
+        return (
+            section_markers >= 2
+            or (looks_heading and numeric_ratio > 0.08)
+            or (has_toc_keyword and section_markers >= 1)
+        )
+
+    def _sentence_quality_bonus(self, text: str, overlap_terms: set[str]) -> float:
+        words = text.split()
+        bonus = 0.0
+        if 8 <= len(words) <= 32:
+            bonus += 1.0
+        if any(keyword in text.lower() for keyword in {"include", "means", "refers to", "characteristics", "features"}):
+            bonus += 1.25
+        if overlap_terms:
+            bonus += min(len(overlap_terms), 4) * 0.4
+        if text.endswith((".", "!", "?")):
+            bonus += 0.3
+        return bonus
 
 
 class RagService:
