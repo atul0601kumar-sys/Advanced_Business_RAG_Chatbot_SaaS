@@ -67,6 +67,9 @@ function ChatWindowComponent({
   onStopSpeech,
 }: ChatWindowProps) {
   const endRef = useRef<HTMLDivElement | null>(null);
+  const hasStreamingAssistantMessage = messages.some(
+    (message) => message.role === "assistant" && message.isStreaming,
+  );
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -182,7 +185,7 @@ function ChatWindowComponent({
             voiceOutputSupported={voiceOutputSupported}
           />
         ))}
-        {isGenerating ? <LoadingIndicator /> : null}
+        {isGenerating && !hasStreamingAssistantMessage ? <LoadingIndicator /> : null}
         <div ref={endRef} />
       </div>
     </section>
