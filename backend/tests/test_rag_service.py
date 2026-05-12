@@ -217,3 +217,118 @@ def test_rag_service_adds_follow_up_after_incomplete_lead_in(db_session, seeded_
     assert "the main characteristics of a company are" in answer_lower
     assert "separate legal entity" in answer_lower
     assert "limited liability" in answer_lower
+
+
+class IncludesStyleRetrievalService:
+    async def retrieve(self, db, workspace_id, query, request_filters):  # noqa: ARG002
+        return RetrievalResponse(
+            query=query,
+            final_chunks_count=1,
+            results=[
+                RetrievalResultItem(
+                    chunk_id="company-includes",
+                    text=(
+                        "The main characteristics of a company include separate legal entity, perpetual succession, "
+                        "limited liability, and transferability of shares."
+                    ),
+                    vector_score=0.92,
+                    keyword_score=0.74,
+                    hybrid_score=0.86,
+                    rerank_score=0.93,
+                    metadata=RetrievalResultMetadata(
+                        document_id="doc-company",
+                        file_name="Introduction to Company.pdf",
+                        page_number=26,
+                        workspace_id=str(workspace_id),
+                    ),
+                ),
+            ],
+        )
+
+
+def test_rag_service_rewrites_direct_answer_from_includes_sentence(db_session, seeded_workspace):
+    service = RagService(
+        retrieval_service=IncludesStyleRetrievalService(),
+        chat_provider="extractive",
+    )
+
+    response = asyncio.run(
+        service.generate_answer(
+            db_session,
+            seeded_workspace.workspace_id,
+            "What are the characteristics of a company?",
+            "detailed",
+            None,
+            memory=_memory_snapshot(),
+            prior_messages=[],
+        )
+    )
+
+    answer_lower = response.answer.lower()
+    assert answer_lower.startswith("the main characteristics of a company are")
+    assert "separate legal entity" in answer_lower
+    assert "limited liability" in answer_lower
+
+
+class HeadingOnlyTopHitRetrievalService:
+    async def retrieve(self, db, workspace_id, query, request_filters):  # noqa: ARG002
+        return RetrievalResponse(
+            query=query,
+            final_chunks_count=2,
+            results=[
+                RetrievalResultItem(
+                    chunk_id="company-heading-only",
+                    text="1.3 Characteristics of a Company",
+                    vector_score=0.97,
+                    keyword_score=0.82,
+                    hybrid_score=0.91,
+                    rerank_score=0.96,
+                    metadata=RetrievalResultMetadata(
+                        document_id="doc-company",
+                        file_name="Introduction to Company.pdf",
+                        page_number=3,
+                        workspace_id=str(workspace_id),
+                    ),
+                ),
+                RetrievalResultItem(
+                    chunk_id="company-real-answer",
+                    text=(
+                        "The main characteristics of a company include separate legal entity, perpetual succession, "
+                        "limited liability, and transferability of shares."
+                    ),
+                    vector_score=0.89,
+                    keyword_score=0.7,
+                    hybrid_score=0.85,
+                    rerank_score=0.9,
+                    metadata=RetrievalResultMetadata(
+                        document_id="doc-company",
+                        file_name="Introduction to Company.pdf",
+                        page_number=26,
+                        workspace_id=str(workspace_id),
+                    ),
+                ),
+            ],
+        )
+
+
+def test_rag_service_ignores_heading_only_top_hit(db_session, seeded_workspace):
+    service = RagService(
+        retrieval_service=HeadingOnlyTopHitRetrievalService(),
+        chat_provider="extractive",
+    )
+
+    response = asyncio.run(
+        service.generate_answer(
+            db_session,
+            seeded_workspace.workspace_id,
+            "What are the characteristics of a company?",
+            "detailed",
+            None,
+            memory=_memory_snapshot(),
+            prior_messages=[],
+        )
+    )
+
+    answer_lower = response.answer.lower()
+    assert "separate legal entity" in answer_lower
+    assert "1.3 characteristics of a company" not in answer_lower

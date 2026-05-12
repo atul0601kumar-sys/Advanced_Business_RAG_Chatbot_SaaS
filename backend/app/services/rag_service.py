@@ -178,8 +178,8 @@ class ExtractiveChatClient:
 
         selected = self._select_sentences(sentences, mode)
         if mode == "bullet":
-            return "\n".join(f"- {sentence}" for sentence in selected)
-        return " ".join(selected)
+            return "\n".join(f"- {self._clean_sentence_for_output(sentence)}" for sentence in selected)
+        return self._compose_prose_answer(query, selected, mode)
 
     def stream(
         self,
@@ -206,6 +206,8 @@ class ExtractiveChatClient:
                 if not normalized:
                     continue
                 if self._looks_like_outline_noise(normalized):
+                    continue
+                if self._looks_like_heading_fragment(normalized, query_terms):
                     continue
                 key = normalized.lower()
                 if key in seen:
@@ -252,6 +254,22 @@ class ExtractiveChatClient:
                     break
         return selected or [ranked_sentences[0][0]]
 
+    def _compose_prose_answer(self, query: str, selected: list[str], mode: ChatMode) -> str:
+        cleaned = [self._clean_sentence_for_output(sentence) for sentence in selected if sentence.strip()]
+        if not cleaned:
+            return FALLBACK_ANSWER
+
+        primary = cleaned[0]
+        if mode == "concise":
+            return self._rewrite_as_direct_answer(query, primary)
+
+        follow_up = cleaned[1] if len(cleaned) > 1 else None
+        if self._needs_follow_up_sentence(primary) and follow_up:
+            primary = self._merge_follow_up_sentence(primary, follow_up)
+        else:
+            primary = self._rewrite_as_direct_answer(query, primary)
+        return primary
+
     def _tokenize(self, text: str) -> set[str]:
         return {
             token
@@ -285,13 +303,30 @@ class ExtractiveChatClient:
             or (has_toc_keyword and section_markers >= 1)
         )
 
+    def _looks_like_heading_fragment(self, text: str, query_terms: set[str]) -> bool:
+        words = text.split()
+        if not words:
+            return False
+        titlecase_words = sum(1 for word in words if word[:1].isupper())
+        titlecase_ratio = titlecase_words / len(words)
+        overlap = len(query_terms.intersection(self._tokenize(text)))
+        short_heading = len(words) <= 8 and not text.endswith((".", "!", "?"))
+        numbered_heading = bool(re.match(r"^\d+(?:\.\d+)*\s+", text))
+        generic_heading = short_heading and text.lower().startswith(
+            ("characteristics of", "features of", "meaning of", "introduction to", "types of")
+        )
+        return numbered_heading or generic_heading or (short_heading and overlap >= 2 and titlecase_ratio >= 0.45)
+
     def _sentence_quality_bonus(self, text: str, overlap_terms: set[str]) -> float:
         words = text.split()
         bonus = 0.0
         if 8 <= len(words) <= 32:
             bonus += 1.0
-        if any(keyword in text.lower() for keyword in {"include", "means", "refers to", "characteristics", "features"}):
-            bonus += 1.25
+        if any(
+            keyword in text.lower()
+            for keyword in {"include", "includes", "means", "refers to", "characteristics", "features", "has", "have", "consists"}
+        ):
+            bonus += 1.8
         if overlap_terms:
             bonus += min(len(overlap_terms), 4) * 0.4
         if text.endswith((".", "!", "?")):
@@ -318,6 +353,67 @@ class ExtractiveChatClient:
     def _needs_follow_up_sentence(self, text: str) -> bool:
         words = text.split()
         return text.rstrip().endswith(":") or len(words) < 8
+
+    def _clean_sentence_for_output(self, text: str) -> str:
+        cleaned = " ".join(text.strip().split())
+        cleaned = re.sub(r"^\d+(?:\.\d+)*\s+", "", cleaned)
+        cleaned = re.sub(r"\b\d+(?:\.\d+)+\b", " ", cleaned)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip(" -:;,")
+        cleaned = re.sub(
+            r"(?i)\b(?:meaning|lesson|unit|chapter|summary|characteristics and types of a company)\b",
+            " ",
+            cleaned,
+        )
+        cleaned = re.sub(r"(?i)\bcharacteristics of a company\b", "the main characteristics of a company", cleaned)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip(" -:;,")
+        return cleaned
+
+    def _merge_follow_up_sentence(self, primary: str, follow_up: str) -> str:
+        opener = primary.rstrip(" :;,.")
+        continuation = re.sub(r"^[Tt]he main [^:]+?:?\s*", "", follow_up).strip()
+        if continuation:
+            return f"{opener}: {continuation}"
+        return opener
+
+    def _rewrite_as_direct_answer(self, query: str, sentence: str) -> str:
+        query_clean = query.strip().rstrip(" ?!.")
+        lowered_query = query_clean.lower()
+        lowered_sentence = sentence.lower()
+
+        if lowered_query.startswith("what are "):
+            subject = query_clean[9:].strip()
+            clause = self._extract_clause(sentence)
+            if clause and subject and not lowered_sentence.startswith(subject.lower()):
+                return f"{self._normalize_subject(subject)} are {clause}"
+        if lowered_query.startswith("what is "):
+            subject = query_clean[8:].strip()
+            clause = self._extract_clause(sentence)
+            if clause and subject and not lowered_sentence.startswith(subject.lower()):
+                return f"{self._normalize_subject(subject)} is {clause}"
+        return sentence
+
+    def _extract_clause(self, sentence: str) -> str | None:
+        match = re.search(
+            r"(?i)\b(?:include|includes|are|is|means|refers to)\b\s*:?(.+)$",
+            sentence,
+        )
+        if not match:
+            return None
+        clause = match.group(1).strip(" -:;,")
+        clause = re.sub(r"\b\d+(?:\.\d+)+\b", " ", clause)
+        clause = re.sub(r"\s+", " ", clause).strip(" -:;,")
+        return clause or None
+
+    def _normalize_subject(self, subject: str) -> str:
+        normalized = subject.strip()
+        lowered = normalized.lower()
+        normalized_no_article = re.sub(r"^(the)\s+", "", normalized, flags=re.IGNORECASE)
+        lowered_no_article = normalized_no_article.lower()
+        if lowered_no_article.startswith("characteristics of "):
+            return f"The main {normalized_no_article}"
+        if lowered_no_article.startswith("features of "):
+            return f"The main {normalized_no_article}"
+        return normalized[:1].upper() + normalized[1:]
 
 
 class RagService:

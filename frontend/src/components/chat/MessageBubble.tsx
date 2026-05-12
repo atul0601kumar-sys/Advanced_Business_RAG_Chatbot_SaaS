@@ -147,14 +147,20 @@ function MessageBubbleComponent({
         </div>
 
         {isAssistant && showCitations && message.citations.length ? (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <p className="text-[0.68rem] font-medium uppercase tracking-[0.28em] text-slate-500">
+              References
+            </p>
+            <div className="space-y-1.5">
             {message.citations.map((citation, index) => (
               <CitationCard
                 key={`${message.id}-${citation.file_name ?? "source"}-${index}`}
                 citation={citation}
                 highlightQuery={message.relatedQuery}
+                index={index}
               />
             ))}
+            </div>
           </div>
         ) : null}
 

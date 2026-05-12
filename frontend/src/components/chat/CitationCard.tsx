@@ -7,6 +7,7 @@ import type { Citation } from "@/lib/chat";
 type CitationCardProps = {
   citation: Citation;
   highlightQuery?: string;
+  index: number;
 };
 
 function escapeRegExp(value: string) {
@@ -41,7 +42,7 @@ function highlightPreview(content: string, query?: string) {
   );
 }
 
-function CitationCardComponent({ citation, highlightQuery }: CitationCardProps) {
+function CitationCardComponent({ citation, highlightQuery, index }: CitationCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const previewNodes = useMemo(
@@ -50,17 +51,22 @@ function CitationCardComponent({ citation, highlightQuery }: CitationCardProps) 
   );
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition hover:border-white/20">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <p className="text-sm font-semibold text-white">
-            {citation.file_name ?? "Website source"}
-          </p>
-          <div className="flex flex-wrap gap-2 text-xs text-slate-400">
-            {citation.page_number !== null ? <span>Page {citation.page_number}</span> : null}
+    <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5 transition hover:border-white/15">
+      <div className="flex items-start gap-3">
+        <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-1.5 text-[0.68rem] font-medium text-slate-300">
+          {index + 1}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="truncate text-sm font-medium text-white">
+              {citation.file_name ?? "Website source"}
+            </p>
+            {citation.page_number !== null ? (
+              <span className="text-xs text-slate-400">p. {citation.page_number}</span>
+            ) : null}
             {citation.url ? (
               <a
-                className="text-[var(--chat-brand)] hover:text-white"
+                className="text-xs text-[var(--chat-brand)] transition hover:text-white"
                 href={citation.url}
                 rel="noreferrer"
                 target="_blank"
@@ -68,19 +74,19 @@ function CitationCardComponent({ citation, highlightQuery }: CitationCardProps) 
                 Open source
               </a>
             ) : null}
+            <button
+              aria-expanded={isExpanded}
+              className="text-xs text-slate-400 transition hover:text-white"
+              onClick={() => setIsExpanded((current) => !current)}
+              type="button"
+            >
+              {isExpanded ? "Hide preview" : "Preview"}
+            </button>
           </div>
         </div>
-        <button
-          aria-expanded={isExpanded}
-          className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-slate-300 transition hover:border-white/20 hover:text-white"
-          onClick={() => setIsExpanded((current) => !current)}
-          type="button"
-        >
-          {isExpanded ? "Hide preview" : "View preview"}
-        </button>
       </div>
       {isExpanded ? (
-        <div className="mt-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm leading-6 text-slate-200">
+        <div className="mt-2 rounded-xl border border-white/8 bg-slate-950/30 px-3 py-2 text-sm leading-6 text-slate-200">
           {previewNodes}
         </div>
       ) : null}
