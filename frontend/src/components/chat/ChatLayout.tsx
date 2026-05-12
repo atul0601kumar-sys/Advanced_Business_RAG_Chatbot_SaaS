@@ -808,28 +808,53 @@ export function ChatLayout({ initialView = "chat" }: ChatLayoutProps) {
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
                 <button
-                  className="rounded-full border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:border-white/20 hover:text-white"
+                  className="inline-flex max-w-[18rem] items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-left text-sm text-slate-300 transition hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
                   onClick={() => setDocumentFilterOpen((current) => !current)}
                   type="button"
                 >
-                  {selectedDocumentIds.length === 0
-                    ? "All documents"
-                    : selectedDocumentIds.length === 1
-                      ? selectedDocuments[0]?.title ?? "1 document"
-                      : `${selectedDocumentIds.length} documents`}
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-[0.62rem] uppercase tracking-[0.28em] text-slate-500">Chat scope</span>
+                    <span className="truncate text-sm text-slate-100">
+                      {selectedDocumentIds.length === 0
+                        ? "All documents"
+                        : selectedDocumentIds.length === 1
+                          ? selectedDocuments[0]?.title ?? "1 document"
+                          : `${selectedDocumentIds.length} documents selected`}
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={`text-xs text-slate-400 transition ${documentFilterOpen ? "rotate-180" : ""}`}
+                  >
+                    v
+                  </span>
                 </button>
                 {documentFilterOpen ? (
-                  <div className="absolute right-0 z-20 mt-2 w-[22rem] rounded-3xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur">
+                  <div className="absolute left-0 top-full z-20 mt-2 w-[20rem] rounded-3xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur">
                     <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
                       <p className="text-sm font-medium text-white">Chat scope</p>
                       <button
-                        className="text-xs text-slate-400 transition hover:text-white"
+                        className="text-xs text-cyan-200/80 transition hover:text-white"
                         onClick={() => setSelectedDocumentIds([])}
                         type="button"
                       >
-                        All documents
+                        Reset
                       </button>
                     </div>
+                    <button
+                      className={`mt-3 flex w-full items-center justify-between rounded-2xl border px-3 py-2 text-left text-sm transition ${
+                        selectedDocumentIds.length === 0
+                          ? "border-cyan-300/30 bg-cyan-400/10 text-cyan-50"
+                          : "border-white/10 text-slate-200 hover:border-white/20"
+                      }`}
+                      onClick={() => setSelectedDocumentIds([])}
+                      type="button"
+                    >
+                      <span>All documents</span>
+                      {selectedDocumentIds.length === 0 ? (
+                        <span className="text-xs uppercase tracking-[0.24em] text-cyan-200/80">Active</span>
+                      ) : null}
+                    </button>
                     <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">
                       {workspaceDocuments.length ? (
                         workspaceDocuments.map((document) => {
@@ -845,7 +870,12 @@ export function ChatLayout({ initialView = "chat" }: ChatLayoutProps) {
                                 onChange={() => toggleDocumentSelection(document.id)}
                                 type="checkbox"
                               />
-                              <span className="min-w-0 break-words">{document.title}</span>
+                              <span className="min-w-0">
+                                <span className="block break-words">{document.title}</span>
+                                <span className="mt-1 block text-xs text-slate-500">
+                                  {document.chunk_count} chunks
+                                </span>
+                              </span>
                             </label>
                           );
                         })
